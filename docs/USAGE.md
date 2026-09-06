@@ -35,8 +35,8 @@ actually does.
 | [`gen-cert`](#2-generate-a-tls-certificate-needed-if-the-real-activation-call-is-https-which-is-likely) | Generate a self-signed TLS cert/key pair for `serve --cert/--key` | No |
 | [`list-test-firmware`](#6a-listing-archived-test-firmware) | List your archived test-firmware `.Hex` files (read-only) | No |
 | [`dump-setup`](#6-diagnostics-experimental-needs-real-hardware) | Read + best-effort-decrypt an ESC's 256-byte Setup/config block | Yes |
-| [`probe-flash`](#6b-extracting-a-firmware-backup-experimental-read-only) | Read a small chunk at an arbitrary flash address (sanity check before `dump-flash`) | Yes |
-| [`dump-flash`](#6b-extracting-a-firmware-backup-experimental-read-only) | Dump a flash address range to a new file (never into your archive) | Yes |
+| [`probe-flash`](#6b-extracting-a-firmware-backup-experimental-read-only) | Read a small chunk at an arbitrary flash address (sanity check before `dump-info-page`) | Yes |
+| [`dump-info-page`](#6b-extracting-a-firmware-backup-experimental-read-only) | Dump a flash address range to a new file (never into your archive) | Yes |
 
 ### `serve`
 
@@ -109,12 +109,12 @@ usage: blheli32proxy probe-flash [-h] --port PORT [--address ADDRESS] [--length 
   --address ADDRESS  flash address to read, e.g. 0x0000 (default: 0x0000)
   --length LENGTH    bytes to read, 1-256 (default: 16)
 ```
-See [§6b](#6b-extracting-a-firmware-backup-experimental-read-only) — always run this before `dump-flash`.
+See [§6b](#6b-extracting-a-firmware-backup-experimental-read-only) — always run this before `dump-info-page`.
 
-### `dump-flash`
+### `dump-info-page`
 
 ```
-usage: blheli32proxy dump-flash [-h] --port PORT [--start START] --end END
+usage: blheli32proxy dump-info-page [-h] --port PORT [--start START] --end END
                                 --out OUT [--chunk-size CHUNK_SIZE] [--overwrite]
 
   --port PORT           serial port, e.g. /dev/ttyACM0 or COM3 (required)
@@ -127,6 +127,26 @@ usage: blheli32proxy dump-flash [-h] --port PORT [--start START] --end END
   --overwrite           allow overwriting an existing --out file
 ```
 See [§6b](#6b-extracting-a-firmware-backup-experimental-read-only) for the full how-to and safety notes.
+
+### `dump-firmware`
+
+```
+usage: blheli32proxy dump-firmware [-h] --port PORT --candidate CANDIDATE
+                                   [--start START] [--end END]
+                                   [--out OUT] [--overwrite] [--motor-index MOTOR_INDEX]
+
+  --port PORT           serial port, e.g. /dev/ttyACM0 or COM3 (required)
+  --candidate CANDIDATE a candidate .Hex file to compare against (repeat for
+                        multiple; first match wins per chunk, required)
+  --start START         start address, inclusive (default: the earliest address any
+                        --candidate covers — never lower, works for any model/MCU)
+  --end END             end address, exclusive (default: one past the latest address
+                        any --candidate covers)
+  --out OUT             output file path — same archive-write refusal as dump-info-page
+  --overwrite           allow overwriting an existing --out file
+```
+See [§6c](#6c-extracting-application-code-firmware-via-the-verify-oracle-experimental-read-only)
+for the full how-to and safety notes.
 
 ## Next testing session checklist (do this when a BLHeli_32 ESC is available)
 
@@ -166,7 +186,7 @@ OS-specific code paths in the approval server itself (only the optional hardware
 
 ## 1a. Point the tool at your test-firmware archive (optional)
 
-`list-test-firmware`'s `--dir` default and `dump-flash`'s archive-write safety check both read the
+`list-test-firmware`'s `--dir` default and `dump-info-page`'s archive-write safety check both read the
 `BLHELI32PROXY_ARCHIVE_DIR` environment variable — a **flat folder of `.Hex` files** (no version
 subfolders needed; filenames already encode manufacturer/layout/version). There's no built-in
 default, since its location is up to you.
@@ -183,7 +203,7 @@ way, this project only ever reads from it (never writes into it, except the deli
 check below).
 
 Add this to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist it. If unset:
-`list-test-firmware --dir` becomes required (no default), and `dump-flash` still runs but skips
+`list-test-firmware --dir` becomes required (no default), and `dump-info-page` still runs but skips
 its archive-write safety check with a warning — double-check `--out` yourself in that case.
 
 ## 1b. Obtaining test-firmware `.Hex` files from the official source
@@ -388,9 +408,9 @@ answering the app's activation call ([§3](#3-run-the-approval-server)-[§4](#4-
 
 ## 6b. Extracting a firmware backup (experimental, read-only)
 
-`probe-flash` and `dump-flash` read an arbitrary flash address on a connected ESC — separate from
+`probe-flash` and `dump-info-page` read an arbitrary flash address on a connected ESC — separate from
 `dump-setup` above, which only reads the small config block. This is **read-only**: it cannot
-corrupt or brick the ESC the way a bad *write* could, and `dump-flash` refuses to write its output
+corrupt or brick the ESC the way a bad *write* could, and `dump-info-page` refuses to write its output
 anywhere under `$BLHELI32PROXY_ARCHIVE_DIR` (your archived BLHeli material), when that env var is
 set, regardless of what path you give it. If the env var isn't set, this check is skipped with a
 warning — verify `--out` yourself in that case.
@@ -416,7 +436,7 @@ uses an STM32 F0, so check its datasheet/BLHeliSuite32xl's own "FLASH size for a
 rather than assuming a value):
 
 ```bash
-blheli32proxy dump-flash --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
+blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
     --out dumps/ak32-32.7-backup.bin
 ```
 
@@ -429,6 +449,42 @@ experiment** (a new firmware flash, an activation attempt, or the AM32-flashing 
 If the probe instead returns something that doesn't look like real code (all `0xFF`, all `0x00`,
 or a refused/CRC-failed read), record that in `PLAN.md` — it answers the "can firmware even be
 extracted" question either way, which matters for this project regardless of the answer.
+
+**Update, confirmed 2026-09-06**: `cmd_DeviceRead` (what `probe-flash`/`dump-info-page` use) is refused
+at every real application-code address tested (RDP) — it only works from `0x7C00` onward (the info
+page: Setup block, activation status, device info). For application code below that, use
+`dump-firmware` instead (next section), which works around this via a different command.
+
+## 6c. Extracting application-code firmware via the Verify oracle (experimental, read-only)
+
+`cmd_DeviceRead` is RDP-blocked below `0x7C00`, but `cmd_DeviceVerify` isn't — it never transmits
+real flash content back over the wire, only a match/mismatch signal, and RDP doesn't block that
+internal comparison the way it blocks a raw read (see
+[Hardware Findings](knowledge/hardware-findings.md#the-verify-oracle-exploration)). `dump-firmware`
+uses this: it compares real flash against one or more candidate `.Hex` files you already have (e.g.
+from `BLHeli32_HexFiles/` or `testcode/`), bisecting down to whatever sub-range each candidate
+actually confirms rather than treating a fixed chunk as all-or-nothing — a candidate that only
+partially covers a range still confirms the part it does cover.
+
+```bash
+blheli32proxy dump-firmware --port /dev/ttyACM0 --motor-index 0 \
+    --candidate BLHeli32_HexFiles/Furling32_Multi_32_95.Hex
+```
+
+Pass `--candidate` multiple times to try several files in order (first real match per chunk wins)
+— useful when one candidate has gaps, or when comparing across firmware eras (e.g. 32.7.x's static
+PWM vs 32.8.x+'s dynamic PWM — pass candidates from each era separately to see what actually
+differs). **Never fabricates a value for a range no candidate can confirm** — unconfirmed ranges
+are written as `0xFF` in the padded `.bin` output and omitted entirely from the sparse `.hex` twin
+(both written automatically alongside each other), same "leave undecoded rather than guess" rule as
+`protocol/setup_fields.py`. `--out` defaults to a name derived from the candidate's own filename,
+matching this project's `.ixi` naming convention.
+
+**`--start`/`--end` default to whatever the candidate(s) actually cover** — the safe boundary is
+derived from the candidate files themselves (a firmware-update file never includes the bootloader,
+for any chip on any model), not a fixed address. This is what makes the command work across every
+BLHeli32 model without per-model configuration. Past the candidates' own upper range (the info
+page), use `dump-info-page` instead, which already works there via direct reads.
 
 ## 7a. Capturing raw traffic with tcpdump (no redirect needed — do this first)
 

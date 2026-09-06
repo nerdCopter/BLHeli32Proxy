@@ -40,6 +40,16 @@ CMD_DEVICE_READ = 0x3A
 CMD_DEVICE_WRITE = 0x3B
 CMD_DEVICE_READ_EEPROM = 0x3D
 CMD_DEVICE_WRITE_EEPROM = 0x3E
+CMD_DEVICE_VERIFY = 0x40
+
+FLASH_PAGE_SIZE = 1024  # DEFAULT for the STM32F0-family ESCs tested so far — not universal, a
+# different MCU family may use a different page size. Callers targeting other hardware should
+# pass an explicit page_size to page_erase() rather than assume this.
+BOOTLOADER_END = 0x2000  # DEFAULT: every STM32F0-family firmware-update .Hex file checked so far
+# starts no earlier than this. Not confirmed universal across every BLHeli32 MCU family — a
+# different chip may have a differently-sized bootloader. The bootloader must never be written or
+# erased regardless of chip; callers on different hardware should pass an explicit bootloader_end
+# to write_flash()/page_erase() rather than trust this default.
 
 ACK_OK = 0x00
 ACK_I_INVALID_CMD = 0x02
@@ -217,3 +227,90 @@ def read_flash(transport, addr: int, length: int, timeout: float = 2.0) -> bytes
     read_flash(transport, 0x7C00, 256)."""
     reply = _send(transport, build_read_request(CMD_DEVICE_READ, addr, length), timeout)
     return reply["payload"]
+
+
+def verify_flash(transport, addr: int, data: bytes, timeout: float = 2.0) -> bool:
+    """Verify (cmd_DeviceVerify, 0x40) a candidate buffer against the ESC's
+    real flash content at `addr`, without ever transmitting the real content
+    back over the wire — the ESC's own bootloader compares internally and
+    returns only ACK_OK (match) or an error ack (mismatch). Never writes or
+    erases (confirmed, see docs/knowledge/hardware-findings.md's verify-oracle
+    exploration). Returns True on a real match, False on any mismatch/error
+    ack. Usable both for a normal same-content check and, address by address,
+    as a byte-guessing oracle toward a firmware dump — RDP blocks raw
+    cmd_DeviceRead, but this oracle still discriminates match/mismatch even
+    at Read-blocked addresses (see docs/knowledge/hardware-findings.md's
+    verify-oracle exploration)."""
+    if not 1 <= len(data) <= 256:
+        raise ValueError(f"verify length {len(data)} out of range (1-256 bytes per frame)")
+    try:
+        _send(transport, build_request(CMD_DEVICE_VERIFY, addr, payload=data), timeout)
+        return True
+    except FourWayError:
+        return False
+
+
+def discover_byte(transport, addr: int, timeout: float = 2.0) -> int | None:
+    """Brute-force discover the real byte value at `addr` by trying every
+    value 0-255 via verify_flash() until one matches — the last resort when
+    no candidate covers this address at all. Up to 256 real round-trips for
+    one byte; only reasonable for a small number of genuinely unresolved
+    bytes, never a whole unknown region. Returns None (a real anomaly, not
+    expected in normal operation) if no value 0-255 matches."""
+    for value in range(256):
+        if verify_flash(transport, addr, bytes([value]), timeout):
+            return value
+    return None
+
+
+def page_erase(transport, page: int, timeout: float = 5.0, *, page_size: int = FLASH_PAGE_SIZE,
+               bootloader_end: int = BOOTLOADER_END) -> None:
+    """Erase one flash page (cmd_DevicePageErase, 0x39). Payload is the page
+    number, not a byte address. NOT YET CONFIRMED against real hardware.
+
+    `page_size` and `bootloader_end` default to the values confirmed for the
+    STM32F0-family BLHeli32 ESCs tested so far (AK32, Furling32) — these are
+    MCU-specific facts, not universal across every BLHeli32 ESC. A different
+    ESC's MCU family may use a different flash page size or have its
+    bootloader occupy a different address range; re-confirm both for any
+    new hardware before trusting these defaults (Setup-block's ESC_CPU
+    field, offset 0x60, identifies the real MCU — see hardware-findings.md).
+
+    HARD SAFETY GUARD: refuses to erase any page overlapping the bootloader
+    (below `bootloader_end`) — the bootloader must never be erased, no
+    exceptions."""
+    page_addr = page * page_size
+    if page_addr < bootloader_end:
+        raise ValueError(
+            f"refusing to erase page {page} (addr {page_addr:#06x}) — overlaps the bootloader "
+            f"region (below {bootloader_end:#06x}); the bootloader must never be erased"
+        )
+    _send(transport, build_request(CMD_DEVICE_PAGE_ERASE, payload=bytes([page])), timeout)
+
+
+def write_flash(transport, addr: int, data: bytes, timeout: float = 5.0, *,
+                 bootloader_end: int = BOOTLOADER_END) -> None:
+    """Write up to 256 bytes starting at `addr` to the currently-connected
+    ESC (call connect_esc() first). Caller is responsible for erasing the
+    covering page(s) first via page_erase() — this function only writes.
+    NOT YET CONFIRMED against real hardware — the real BLHeliSuite32xl app
+    never issues cmd_DeviceWrite at all in practice (see
+    docs/knowledge/activation-licensing.md), for reasons traced to its own
+    internal TFlashState logic, not the ESC bootloader itself.
+
+    `bootloader_end` defaults to the value confirmed for the STM32F0-family
+    BLHeli32 ESCs tested so far — a different ESC's MCU family may have its
+    bootloader occupy a different range; re-confirm before trusting this
+    default on new hardware.
+
+    HARD SAFETY GUARD: refuses to write any range overlapping the bootloader
+    (below `bootloader_end`) — the bootloader must never be overwritten, no
+    exceptions."""
+    if not 1 <= len(data) <= 256:
+        raise ValueError(f"write length {len(data)} out of range (1-256 bytes per frame)")
+    if addr < bootloader_end:
+        raise ValueError(
+            f"refusing to write at {addr:#06x} — overlaps the bootloader region (below "
+            f"{bootloader_end:#06x}); the bootloader must never be overwritten"
+        )
+    _send(transport, build_request(CMD_DEVICE_WRITE, addr, payload=data), timeout)

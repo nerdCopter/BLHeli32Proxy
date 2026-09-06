@@ -1,7 +1,13 @@
 # Hardware Findings
 
 Empirical findings from real-hardware testing (2026-09-04): PyroDrone F7 (EmuFlight 0.4.3) + Aikon
-AK32 4-in-1 35A 6S (BLHeli_32 firmware 32.7, STM32F051x6).
+AK32 4-in-1 35A 6S (BLHeli_32 firmware 32.7, STM32F051x6 — confirmed twice independently, 2026-09-06:
+Aikon's own product page, `aikon-electronics.com/index.php?id=20`, states "MCU: STM32 F0" [family
+only]; this board's own Setup-block `ESC_CPU` field, offset `0x60`, read live via `dump-setup
+--motor-index 0` [read-only: enter_4way_if → connect_esc → read_flash(0x7C00,256) → decrypt, no
+write/erase], decodes to the literal ASCII string `#BLHeli_32*STM32F051x6#` — the exact sub-variant,
+confirmed directly from this hardware, not inherited from the research blog post's different example
+ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#` at offset ~0x40).
 
 ## Test-hardware quirks — read these before re-testing
 
@@ -154,6 +160,17 @@ certainly a nil-object dereference) for that case, present across at least 3 dif
 layouts/bootloaders. **Fix for any future board**: always add a matching local `.Hex` file to
 `BLHeli32_HexFiles/` for the specific connected ESC layout *before* opening the Flash tab.
 
+**Furling32_4in1_C's MCU confirmed (2026-09-06): GD32F350x6, not STM32.** Read live from the
+Setup block's `ESC_CPU` field (offset `0x60`): `#BLHeli_32*GD32F350x6#` — a GigaDevice chip, the
+first non-ST silicon confirmed in this project (AK32 and Furling32 are both STM32F051x6). Real
+firmware is 32.9.0. `dump-firmware` against the closest available candidate (32.9.5, with
+32.8.3/32.7.4 as fallback) confirmed **44.8%** of the app-code region (10,656/23,808 bytes) —
+between Furling32's 98.8% (exact version match available) and AK32's 5% (no close version
+available at all). Consistent with the user's "point-release drift" hypothesis: a firmware line's
+later patches can accumulate changes toward the *next* major version, making them less similar to
+their own line's earlier patches than the version numbers alone would suggest. Saved:
+`dumps/BLHeli32_Furling32_4in1_C - Rev. 32.9.5 - AppCode_260906.bin`/`.hex`.
+
 ## Firmware-dump blocker: RDP
 
 Mapped the readable address range via `cmd_DeviceRead` against the real ESC. **Refused everywhere
@@ -222,3 +239,31 @@ with explicit approval given the stakes (the ESC's real, working firmware).
 
 No writes or erases occurred during this exploration — every test used `cmd_DeviceVerify` only, the
 FC recovered cleanly after each one.
+
+**Update (2026-09-06) — ambiguity resolved, oracle confirmed live**: a real Flash-tab Verify
+attempt on the AK32 (production v32.7 vs. a different test file) showed sequential chunks
+`0x2000`–`0x2300` returning genuine `ACK_OK` before diverging at `0x2400` — see
+[Protocol Reference](protocol-reference.md) and [Activation & Licensing](activation-licensing.md).
+`0x2000` is one of the exact addresses confirmed *blocked* for raw `cmd_DeviceRead` above. A true
+match response at a Read-blocked address proves the Verify oracle discriminates match/mismatch
+even inside RDP-protected flash — it is not blanket-refusing there the way `0x0000` appeared to.
+This resolves the earlier inconclusive verdict (which rested on a single always-wrong guess at
+`0x0000`) in favor of "the oracle is live." **Practical implication**: a full firmware dump via
+byte-by-byte Verify-guessing is theoretically possible (no write/erase risk, confirmed safe) but
+would require up to 256 guesses per byte across the whole image (tens of thousands of round-trips)
+— slow, never attempted, and a substantially different undertaking than anything tried so far. The
+"closed, blocked" status for Goal 2 (firmware dumps) should be revisited with this in mind, not
+treated as settled.
+
+**External data point on bootloader size — raises a question, doesn't settle one**: the AM32
+firmware project's own wiki (`am32-firmware/am32-wiki` on GitHub, fetched directly) documents its
+own bootloader as occupying the first 4KB of flash (`0x08000000`–`0x08000FFF`), app code starting
+at `0x08001000` (27KB reserved on a 32KB MCU). That's half the 8KB (`0x2000`) boundary this project
+found empirically for BLHeli32 (every real firmware-update `.Hex` file checked, any
+manufacturer/version, starts no earlier than `0x2000`). **AM32 and BLHeli32 are independently
+developed** — AM32 replaces BLHeli32 on the same physical hardware but doesn't share source, so
+there's no reason its bootloader must be the same size. What this does raise: what's actually in
+`0x1000`–`0x1FFF` for a real BLHeli32 ESC — genuinely part of a larger proprietary bootloader, or
+something else (e.g. manufacturing-provisioned per-unit data) that firmware-update files simply
+never touch for an unrelated reason. Not resolved either way; `dump-firmware`'s Verify oracle
+technique could test this at `0x1000`–`0x1FFF` specifically if a genuine need arises.

@@ -120,6 +120,17 @@ rather than scanning the whole image, and gives an exact byte offset (`0x2400`) 
 specific test/production firmware pair diverges — not investigated further, not a licensing
 signal, just where the actual code content differs between versions.
 
+**`cmd_DeviceVerify` appears to require 256-byte-aligned addresses for reliable results**: a
+verify-oracle tool in this project initially bisected an unresolved range naively (halving the
+whole remaining span, producing chunks at arbitrary non-aligned start addresses like `0x23a2`,
+`0x20ba`) and got back a flood of false mismatches for content later confirmed byte-identical when
+re-tested at proper 256-byte-aligned addresses (`0x2000`, `0x2100`, `0x2200`...). Every real capture
+of this command, from the vendor app and from this project's own successful scans, has only ever
+used round, 256-aligned addresses — never confirmed to work correctly off that grid. Treat
+non-aligned `cmd_DeviceVerify` requests as unreliable until proven otherwise; always step through
+256-byte pages aligned to a known-good start address, only bisecting *within* one failing page
+(which stays power-of-2 aligned by construction).
+
 **No network activity during Connect/Read/Verify, confirmed from the same real log**: the entire
 traced sequence (4× full ESC connect, Setup-block read, activation-status read, device-info read,
 plus one Verify attempt) never triggered any request in this project's approval-server log running

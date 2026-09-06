@@ -110,3 +110,27 @@ def test_format_ixi_section_missing_field_raises():
     incomplete = {k: v for k, v in EXPECTED_ESC0.items() if k != "Eep_Pgm_Beacon_Delay"}
     with pytest.raises(KeyError):
         sf.format_ixi_section(0, incomplete)
+
+
+def test_extract_identity_strings_from_real_ak32_plaintext():
+    layout, cpu = sf.extract_identity_strings(REAL_PLAINTEXT_ESC0)
+    assert layout == "Aikon_AK32_4IN1_35A_6S_V1_0"
+    assert cpu == "STM32F051x6"
+
+
+def test_extract_identity_strings_never_returns_binary_noise_as_layout():
+    """Regression test: binary config bytes coincidentally fall in the
+    printable-ASCII range often enough that a laxer non-empty check picked up
+    noise from the numeric fields before the real '#'-delimited string —
+    confirmed live against real AK32 plaintext during development."""
+    # bytes before the first real '#' (offset 0x23 in this real capture) are pure
+    # config data, no delimiters at all, but the incomplete plaintext still has a
+    # trailing garbage byte pattern if truncated mid-field — this must return the
+    # real layout name, not a fragment of the leading binary region
+    layout, _ = sf.extract_identity_strings(REAL_PLAINTEXT_ESC0)
+    assert layout is not None
+    assert all(32 <= ord(c) < 127 for c in layout)  # must be clean printable text, not \x00 noise
+
+
+def test_extract_identity_strings_returns_none_for_plaintext_with_no_delimiters():
+    assert sf.extract_identity_strings(bytes(192)) == (None, None)

@@ -55,6 +55,30 @@ def decode_confirmed_fields(plaintext: bytes) -> dict[str, int]:
     return result
 
 
+def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
+    """Extract the board-layout name and MCU string directly from the real
+    Setup block, e.g. "#Furling32_4in1_C#...#BLHeli_32*GD32F350x6#" ->
+    ("Furling32_4in1_C", "GD32F350x6") — confirmed live against multiple real
+    boards (AK32/STM32F051x6, Furling32_4in1_C/GD32F350x6). Scans for
+    '#'-delimited printable-ASCII text anywhere in the plaintext rather than
+    a fixed numeric offset (CONFIRMED_FIELDS' own caution against guessing
+    offsets applies here too — a delimiter search is robust to minor layout
+    differences a fixed slice wouldn't be). Returns (None, None) for either
+    piece not found, never a guessed/fabricated value."""
+    text = "".join(chr(b) if 32 <= b < 127 else "\x00" for b in plaintext)
+    # only a segment with ZERO non-printable bytes counts as real text — binary config bytes
+    # coincidentally fall in the printable-ASCII range often enough that a laxer check (e.g. "any
+    # printable character present") picks up noise from the numeric fields before the real string
+    segments = [s.strip() for s in text.split("#") if s and "\x00" not in s and s.strip()]
+    layout = segments[0] if segments else None
+    cpu = None
+    for seg in segments[1:]:
+        if seg.startswith("BLHeli_32*"):
+            cpu = seg[len("BLHeli_32*") :]
+            break
+    return layout, cpu
+
+
 IXI_PARTIAL_BACKUP_WARNING = (
     "; Partial backup written by blheli32proxy — confirmed fields only (see\n"
     "; protocol/setup_fields.py). NOT a complete .ixi: missing header fields\n"

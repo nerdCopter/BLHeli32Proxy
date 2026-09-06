@@ -104,7 +104,7 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
 - **TLS handling** — cert/key generation tooling done (`gen-cert`); the real app trusts the OS
   certificate store, confirmed live.
 - **CLI tool** — done (`serve`, `gen-cert`, `list-test-firmware`, `dump-setup`, `probe-flash`,
-  `dump-flash`), including a partial-backup `.ixi`-style file writer (`dump-setup --out`).
+  `dump-info-page`), including a partial-backup `.ixi`-style file writer (`dump-setup --out`).
 - **Documentation** — `docs/USAGE.md` (day-to-day operation), `docs/knowledge/` (technical
   reference), `MENU.md` (guided task list).
 

@@ -157,15 +157,29 @@ loading works entirely independent of the approval server. Full sequence that pr
    `tcpdump -i any -n -s 0 'udp port 53 or tcp port 443'` capture during dropdown interaction was
    requested from the user but not yet completed (open item).
 
-**Where this leaves Goal 4**: the app is now fully staged to attempt a real flash — "Flash Selected
-ESC" would write the 32.9.5 test firmware to all 4 real ESCs, which is the exact firmware-loss-risk
-action the standing hard safety constraint gates (real flash could overwrite the AK32's current
-known-good v32.7 firmware with no way to back it up first, since firmware dumps are blocked by
-RDP). **Deliberately not clicked.** "Verify Selected ESC" (`cmd_DeviceVerify`, `0x40` — see
-[Hardware Findings](hardware-findings.md#the-verify-oracle-exploration)) was proposed as a
-non-destructive alternative to try first — compares against flash without writing — but the
-session ended (docs run triggered) before the user decided which to try. **This is the single most
-important open decision for the next session.**
+**"Flash Selected ESC" clicked, no write occurred (2026-09-06)**: with the approval server,
+redirect, and cert trust all running, user clicked "Flash Selected ESC" on the AK32 (real firmware
+v32.7) against the staged 32.9.5 test file. The saved `.xlg`
+([BLHeliSuite32xl-Log-260906-flash-attempt01.xlg](BLHeliSuite32xl-Log-260906-flash-attempt01.xlg))
+shows only `cmd_DeviceInitFlash` → `cmd_DeviceVerify` (erroring `armBLB:General Error` at `0x2400`,
+same divergence point as the earlier confirmed Verify trace) → `cmd_DeviceReset` — **no
+`cmd_DeviceWrite`/erase command appears anywhere in the log**. The ESC's firmware is confirmed
+unchanged. **Confirmed by the user: this is not a version-mismatch gate** — BLHeli's bootloader
+writes unconditionally regardless of source/target version, so a Verify mismatch does not by itself
+block a write; the earlier write-up in this file drew that conclusion and was wrong.
+
+The approval server's own log shows only the same 3 `status.php` empty-body pings during this
+attempt — no new or different HTTP request arrived at all. Since nothing changed on the ESC and no
+new request reached this project's server, the most likely explanation is the still-open item from
+[Hardware Findings](hardware-findings.md#test-hardware-quirks--read-these-before-re-testing): **a
+second, undiscovered host** the app may contact specifically to gate the flash/write action, which
+the current `/etc/hosts` redirect (`blheli.org` only) would not catch — such traffic would go out
+to the real (dead) host, get no reply, and could plausibly cause the app to silently decline to
+write with no error dialog. Next step: re-check the `tcpdump` capture already running
+(`/tmp/blheli-capture.pcap`) for **any** DNS query or TLS SNI other than `blheli.org` occurring
+around the time of this Flash click — not yet done. **This is the single most important open item
+for the next session**, and is what "developing the proxy" for Goal 4 actually depends on: finding
+and answering that second endpoint, not the status-check ping this server already handles.
 
 ## BLHeliSuite32TestActivator — a second, more revealing binary (2026-09-04)
 

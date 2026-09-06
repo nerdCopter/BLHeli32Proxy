@@ -196,3 +196,110 @@ def test_read_flash_setup_block_request_and_payload():
     assert result == payload
     # real captured cmd_DeviceRead request for the Setup block
     assert transport.sent[0] == bytes.fromhex("2f3a7c000100843d")
+
+
+def _minimal_ack_reply(cmd: int, addr: int, ack: int) -> bytes:
+    """A device reply carrying just a 1-byte dummy payload plus an ack — the
+    real reply shape confirmed for cmd_DeviceVerify (protocol-reference.md's
+    real .xlg trace shows PARAM_LEN=1 on the verify reply, not the full
+    candidate echoed back)."""
+    addr_h, addr_l = (addr >> 8) & 0xFF, addr & 0xFF
+    body = bytes([fw.ESCAPE_DEVICE, cmd, addr_h, addr_l, 0x01, 0x00, ack])
+    crc = fw._crc_xmodem(body)
+    return body + bytes([(crc >> 8) & 0xFF, (crc & 0xFF)])
+
+
+def test_verify_flash_true_on_ack_ok():
+    from fakes import FakeTransport
+
+    reply = _minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_OK)
+    transport = FakeTransport([reply])
+    assert fw.verify_flash(transport, 0x2000, bytes(256)) is True
+    assert transport.sent[0][0:2] == bytes([fw.ESCAPE_HOST, fw.CMD_DEVICE_VERIFY])
+
+
+def test_verify_flash_false_on_mismatch_ack():
+    from fakes import FakeTransport
+
+    reply = _minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_D_GENERAL_ERROR)
+    transport = FakeTransport([reply])
+    assert fw.verify_flash(transport, 0x2000, bytes(256)) is False
+
+
+def test_verify_flash_rejects_out_of_range_length():
+    from fakes import FakeTransport
+
+    with pytest.raises(ValueError):
+        fw.verify_flash(FakeTransport([]), 0x2000, b"")
+    with pytest.raises(ValueError):
+        fw.verify_flash(FakeTransport([]), 0x2000, bytes(257))
+
+
+def test_write_flash_sends_real_write_command_byte():
+    from fakes import FakeTransport
+
+    reply = _minimal_ack_reply(fw.CMD_DEVICE_WRITE, 0x3000, fw.ACK_OK)
+    transport = FakeTransport([reply])
+    fw.write_flash(transport, 0x3000, bytes(256))
+    assert transport.sent[0][0:2] == bytes([fw.ESCAPE_HOST, fw.CMD_DEVICE_WRITE])
+
+
+def test_write_flash_refuses_bootloader_region():
+    from fakes import FakeTransport
+
+    transport = FakeTransport([])
+    with pytest.raises(ValueError, match="bootloader"):
+        fw.write_flash(transport, 0x1000, bytes(1))
+    # must refuse before ever touching the transport
+    assert transport.sent == []
+
+
+def test_write_flash_allows_exactly_the_boundary_address():
+    from fakes import FakeTransport
+
+    reply = _minimal_ack_reply(fw.CMD_DEVICE_WRITE, fw.BOOTLOADER_END, fw.ACK_OK)
+    transport = FakeTransport([reply])
+    fw.write_flash(transport, fw.BOOTLOADER_END, bytes(1))  # must not raise
+    assert transport.sent
+
+
+def test_page_erase_sends_real_erase_command_byte():
+    from fakes import FakeTransport
+
+    safe_page = fw.BOOTLOADER_END // fw.FLASH_PAGE_SIZE
+    reply = _minimal_ack_reply(fw.CMD_DEVICE_PAGE_ERASE, 0, fw.ACK_OK)
+    transport = FakeTransport([reply])
+    fw.page_erase(transport, safe_page)
+    assert transport.sent[0][0:2] == bytes([fw.ESCAPE_HOST, fw.CMD_DEVICE_PAGE_ERASE])
+
+
+def test_page_erase_refuses_bootloader_pages():
+    from fakes import FakeTransport
+
+    transport = FakeTransport([])
+    with pytest.raises(ValueError, match="bootloader"):
+        fw.page_erase(transport, page=0)  # page 0 * 1KB = 0x0000, well below the boundary
+    assert transport.sent == []
+
+
+def test_discover_byte_finds_the_real_value_by_trying_each_candidate():
+    from fakes import FakeTransport
+
+    real_value = 0x42
+    # scripted replies: mismatch for every guess before the real value, match at it
+    replies = [
+        _minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_OK if v == real_value else fw.ACK_D_GENERAL_ERROR)
+        for v in range(real_value + 1)
+    ]
+    transport = FakeTransport(replies)
+    assert fw.discover_byte(transport, 0x2000) == real_value
+    assert len(transport.sent) == real_value + 1  # one verify_flash call per guess, stops at the match
+
+
+def test_discover_byte_returns_none_if_nothing_matches():
+    from fakes import FakeTransport
+
+    replies = [_minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_D_GENERAL_ERROR) for _ in range(256)]
+    transport = FakeTransport(replies)
+    assert fw.discover_byte(transport, 0x2000) is None
+    assert len(transport.sent) == 256  # tried every value 0-255

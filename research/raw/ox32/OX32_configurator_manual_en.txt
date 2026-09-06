@@ -1,0 +1,203 @@
+https://ox32.oxbot.com/
+
+OX32 ESC Configurator
+
+User Manual
+
+1
+
+Content
+Parameter Introduction ...................................................................................................................................................................... 3
+General ................................................................................................................................................................................................... 3
+Rampup Setting .................................................................................................................................................................................. 3
+Braking Setting .................................................................................................................................................................................... 4
+Buzzer Setting...................................................................................................................................................................................... 4
+Protection.............................................................................................................................................................................................. 4
+Telemetry & Device Info................................................................................................................................................................... 4
+Firmware Upgrade ................................................................................................................................................................................ 5
+Modify Motor Direction ..................................................................................................................................................................... 8
+Modify ESC Rampup Melody .........................................................................................................................................................10
+Config Import/Export ........................................................................................................................................................................11
+Save Log ..................................................................................................................................................................................................13
+
+2
+
+Parameter Introduction
+General
+i.
+
+Motor Timing：Motor timing determines the point when current switches to the next coil. This
+parameter directly impacts motor efficiency and stability. Increasing motor timing increases torque
+but reduces efficiency and generates more heat. Keep the default value, increase it if desynchronizat-ion occurs.
+
+ii.
+
+Minimum PWM Frequency：ESC's driving frequency for the motor. Higher PWM frequencies
+increase efficiency and flight smoothness but reduce motor power.
+
+iii.
+
+Maximum PWM Frequency：When the maximum and minimum PWM frequencies differ, the PWM
+frequency will vary between the set range based on throttle input.When the highest PWM frequency
+is set to BY RPM, the PWM frequency changes with the motor speed. As the speed increases, the
+PWM frequency rises for smoother flight; as the speed decreases, the PWM frequency decreases to
+enhance motor control.
+
+iv.
+
+Demag Compensation：Demag compensation is a protective feature that prevents the motor from
+stopping or desynchronizing due to demagnetization, especially during rapid throttle increase.Keep
+the default setting, and increase compensation if desynchronization occurs.
+
+Rampup Setting
+i.
+
+Rampup Power：The initial power provided to the motor during startup. This setting primarily
+affects the motor's startup behavior, ensuring smooth startup and operation.Default settings are
+suitable for most cases; increase this setting if using large motors or propellers.
+
+ii.
+
+Soft Rampup：Used to enable or disable the soft rampup function. When enabled, upon arming the
+motor, the RPM will gradually increase from the Soft Rampup Throttle value at a slower rate until it
+reaches the idle speed. This process limits the motor's acceleration rate to ensure a smooth startup,
+reducing unexpected risks. Once the idle speed is reached, the acceleration limit is removed, and the
+motor responds normally until it is disarmed again.
+
+iii.
+
+Acceleration Rate：Defines motor acceleration speed. Higher values increase throttle response. If
+desynchronization occurs, consider reducing this setting.
+
+iv.
+
+Deceleration Rate：Defines motor deceleration speed. Higher values increase throttle response. If
+desynchronization occurs, consider reducing this setting.
+
+v.
+
+Safe Rampup：Enables or disables the safe start function. When the battery is connected and the
+motor is unlocked for the first time, if the ESC detects a motor collision, it will automatically stop that
+motor. This function automatically deactivates when the throttle exceeds a certain value. To prevent
+interference with the [Turtle Mode] function, this feature will not reactivate even if the motor is locked
+and unlocked again, unless the battery is reconnected.
+
+3
+
+Braking Setting
+i.
+
+Brake on Stop：Stops the motor when the throttle is at zero, commonly used for fixed-wing aircraft
+to reduce drag and protect the propeller. If idle speed is enabled, the motor will maintain rotation at
+idle throttle, and the brake function will not be effective.
+
+ii.
+
+Brake Strength on Stop：Adjusts the braking strength when the brake on stop function is enabled.
+
+Buzzer Setting
+i.
+
+Beacon Delay：After powering on, the ESC emits a beacon sound. This setting adjusts the delay for
+the beacon sound.
+
+ii.
+
+Startup Beep Volume：Adjusts the volume of the startup self-check sound. Note: Excessive volume
+may damage the motor.
+
+iii.
+
+Beacon/Signal Beep Volume：Adjusts the volume of motor beeps other than the startup sound.
+Note: Excessive volume may damage the motor.
+
+Protection
+i.
+
+Stall protection (Sensitivity)：Detects abnormal motor speed and takes appropriate protective
+measures.Higher sensitivity makes it easier to detect stalling and protect the motor in time.Lower
+sensitivity increases the risk of motor or ESC damage during crashes or stuttering.Default settings are
+recommended.
+
+ii.
+
+Stall protection (Duration)：Defines how long the motor stops and restarts upon detecting a stall.
+Longer durations provide better protection but may cause greater attitude changes. Shorter
+durations increase the risk of motor or ESC damage during crashes or stuttering.It is generally
+recommended to keep the default setting, which protects the motor while allowing the attitude to
+recover quickly.
+
+iii.
+
+Low RPM Power Protection：For low-KV motors with large propellers, select [On Adaptive]. For
+high-KV motors, enable this setting. Otherwise, try disabling this setting.
+
+iv.
+
+Over-temperature Protection：When the MCU temperature exceeds the protection limit, motor
+output power is reduced to prevent ESC from overheating.
+
+v.
+
+Low Voltage Protection：When the voltage drops below the limit, motor output power is reduced
+to prevent crashes caused by low voltage.
+
+Telemetry & Device Info
+i.
+
+Auto Telemetry Switch：When enabled, the ESC automatically sends telemetry feedback (not
+bidirectional DSHOT).
+
+ii.
+
+Auto Telemetry Interval：Set the time interval for telemetry feedback.
+
+iii.
+
+ESC Name：Set the custom name for the ESC.
+
+4
+
+Firmware Upgrade
+Supports both online and local firmware flashing. Please use a battery to power the ESC during the
+configuration process.
+
+5
+
+6
+
+7
+
+Modify Motor Direction
+
+There is a chance the modification may fail. If it does, please reconnect the configurator and repeat the
+modification process until it succeeds.
+
+8
+
+9
+
+Modify ESC Rampup Melody
+
+10
+
+Config Import/Export
+
+Restore Defualt Settings
+
+11
+
+Export Settings
+
+Import Settings
+
+12
+
+Save Log
+The log file can help us identify issues encountered during firmware flashing, including the status of the
+program’s operation. If you experience problems while configuring the ESC, you can save the log file and send
+it to us so we can help you analyze and resolve the issue.
+
+13
+
+

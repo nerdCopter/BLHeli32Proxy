@@ -1,152 +1,88 @@
-# Session Handoff — 2026-09-05 (live proxy test + 4-board crash root-cause, session ending)
+# Session Handoff — 2026-09-06
 
 Bridge document for the next session — delete once the open items below are resolved or absorbed
 into permanent docs.
 
-## Repo state
+## Key findings this session
 
-- Branch: `master`. Last pushed commit: `9205c37` ("fix: add reset-settle delay, document redirect
-  port + PWM field split"), pushed to `github.com/nerdCopter/BLHeli32Proxy` (**private**).
-  **Uncommitted changes exist on top of that**: a repo-wide documentation restructuring
-  (CLAUDE.md reduced to an `@AGENTS.md` import, a new `MENU.md`, a new `testcode/README.md`,
-  staleness/PII fixes across `PLAN.md`/`README.md`/`IMPLEMENTATION.md`/`docs/knowledge/`) — not yet
-  committed, needs the user's go-ahead.
-- **This repo has an explicit exception to the global branch-per-change policy**: commit and push
-  directly to `master` here, no feature branches/PRs/worktrees (private single-maintainer project —
-  see `feedback_no-branches-this-repo.md` in this project's Claude memory).
-- **New reference files added 2026-09-05** (all in `docs/knowledge/`, already committed):
-  - `Suite-Check-Furling32.txt`, `Suite-Check-FoxeerReaper.txt`, `Suite-Check-Furling32-4in1-C.txt`
-    — real BLHeliSuite32xl status-check output, verbatim, for 3 new boards.
-  - `BLHeli32_Furling32 - Rev. 32.9.5 - Multi_260905.ixi`,
-    `BLHeli32_FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi_260905.ixi`,
-    `BLHeli32_Furling32_4in1_C - Rev. 32.9 - Multi_260905.ixi` — fresh real `.ixi` ground truth,
-    one per new board.
-  - `BLHeliSuite32xl-Log-260905.xlg` (AK32), `6inch-stellarh7dev.xlg` (Furling32, user's own
-    naming), `5inch-foxeerf722v4+reaper.-ESC.xlg` (FOXEER Reaper), `apexf7+apexESC.xlg`
-    (Furling32_4in1_C), `populated-furling.xlg` (Furling32, after the crash fix) — the real app's
-    own saved debug logs, custom binary format, readable via `strings -n 4 <file>.xlg`.
-- **This machine is a different machine than 2026-09-04's session** (same files, kept in sync
-  across machines by a file-sync tool). `.venv` was stale here too (same symptom as the original
-  repo-move) — already recreated (`python3 -m venv .venv --clear && .venv/bin/pip install -e ".[dev]"`), works.
-
-## Key finding #1: live proxy test against the real app — CONFIRMED WORKING
-
-Full detail: `docs/knowledge/activation-licensing.md` §"Local firmware loading via the real app —
-CONFIRMED not server-gated". Summary:
-
-1. Full redirect chain set up and confirmed working end-to-end against the **real,
-   native-Linux `BLHeliSuite32xl`** binary (not just `curl`). **`docs/USAGE.md` §4 is missing a
-   step**: a hosts-file redirect alone does not redirect the port — the real app connects to the
-   implicit default HTTPS port 443, but this project's server defaults to 8443. Needed:
-   `sudo iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 --dport 443 -j REDIRECT --to-port 8443`.
-   **Not yet added to USAGE.md.**
-2. Confirmed live: the real app's status-check call (`GET
-   /BLHeli32_2017_1/status.php?p=BLHeliSuite32xl&v=1044`) hit this project's approval server
-   repeatedly (every "check for updates," every Flash-tab open, every Connect/Read). New confirmed
-   detail: **User-Agent: `BLHeliSuite32 URI Client/1.0`**. The empty-body "no update" response is
-   confirmed non-fatal (was previously just a guess) — app shows a blank "Following Message
-   received:" dialog, then continues normally.
-3. **Disproved the working hypothesis that local firmware loading is server-gated.** Real cause:
-   `BLHeliSuite32xl/BLHeli32_HexFiles/` (the app's own local firmware-catalog folder) was
-   completely empty. Fixed by copying matching `.Hex` files in from `32.9.5_testcode/`.
-4. "Verify Selected ESC" tried (safe, non-destructive) on the AK32 — failed as expected (comparing
-   currently-flashed v32.7 against a different v32.9.5 test file can never byte-match). The real
-   app's own debug log shows this mismatch starts at flash offset `0x2400` exactly — not a
-   licensing signal, purely a version-content difference.
-5. **The single most important open decision, still unresolved**: "Flash Selected ESC" is one
-   click away on multiple boards now — the actual real-flash action Goal 4 needs, and the exact
-   firmware-loss risk the standing hard safety constraint gates (a real flash could overwrite a
-   board's current known-good firmware, with no way to back it up first since firmware dumps are
-   RDP-blocked). **Do not click this without the user explicitly re-confirming the trade-off at
-   that moment** — same rule as always, holds for every board tested today too.
-
-## Key finding #2: the real app's debug log (`.xlg` files) — a goldmine
-
-The app has a "Log" tab in its own UI (`ESC Setup | ESC overview | ESC Flash | Motors | Log`),
-separate from file-based logging — `Settings/BLHeliSuite32xl.ini`'s `[Log] LogOn=1` alone does
-**not** create a file; must manually "Save to file" from that tab. **User convention: each save
-gets a distinct filename** — search `BLHeliSuite32xl/*.xlg` for all of them, don't assume a fixed
-name. Custom binary format (Delphi/Lazarus length-prefixed strings, `file` reports just "data"),
-readable via `strings -n 4 <file>.xlg`. **Do this again after any future real-hardware session.**
-Full technical detail folded into `docs/knowledge/protocol-reference.md`; key points:
-
-- **Real app waits 100ms between `cmd_DeviceReset` and `cmd_DeviceInitFlash`, every single
-  connect, unconditionally** — not just after a failure. This project's own `connect_esc()`
-  (`protocol/fourwayif.py`) doesn't do this — it only waits `retry_delay` (5.5s) *after* a failure,
-  reactively. **Concrete, not-yet-applied fix**: add an unconditional `time.sleep(0.1)` between
-  the reset and init-flash calls — likely improves first-attempt success rate on top of the
-  existing reactive fix.
-- **`ReadActivationStat` reads 16 bytes (not 1) at `0xEB00`**, reports literal `Activation:
-  Activated OK` — this project's code has never read this address at all. Matches the
-  `TActivationStatus` enum found in `TestActivator.exe`'s strings.
-- **`cmd_DeviceVerify` confirmed behavior**: sequential 256-byte chunks from `0x2000` upward, stops
-  at first mismatch.
-- **Zero network activity during Connect/Read/Verify** (cross-checked against the approval-server
-  log running in parallel). Narrows where Goal 4's real activation call must be: only possibly
-  during an actual flash **write**, never observed.
-- Real signature bytes (`06 33 68 04`) and full raw hex frames for every command match this
-  project's own already-implemented frame format exactly — independent confirmation of
-  byte-correctness.
-
-## Key finding #3: Flash-tab crash — ROOT-CAUSED AND FIXED, closed
-
-Reproduced 4 times across 3 unrelated ESC families/bootloaders (AK32-adjacent `h`, FOXEER Reaper
-`m`, Furling32 `k`) — always the exact same `Access violation at address 0000000000A34A7B,
-accessing address 0000000000000000`. Debug logs confirmed this is a **UI-layer bug, not a protocol
-failure**: every log showed a complete, successful ESC connect/read cycle with zero errors; the
-crash itself produced no log output (uncaught exception bypasses the app's logger).
-
-**Root cause confirmed**: happens whenever zero local `.Hex` files in `BLHeli32_HexFiles/` match
-the connected ESC's layout name — almost certainly a nil-object dereference in the app's
-dropdown-population code. **Fix verified**: copied the exact matching `32.9.5_testcode/*.Hex`
-files for the affected layouts into `BLHeli32_HexFiles/` — crash stopped completely, all 4 ESCs
-populated correctly on reconnect (`docs/knowledge/populated-furling.xlg` confirms a clean run).
-**This is closed — not an open item.** Standing rule for any future new board: always add a
-matching local `.Hex` file to `BLHeli32_HexFiles/` *before* opening the Flash tab.
-
-## Other findings (Wine/TestActivator — dead end, deprioritized)
-
-Full detail in `PLAN.md`'s backlog. Short version: the 2026-09-04 Wine `kernel32.dll` failure was
-a corrupted prefix, not missing 32-bit support (fixed with a fresh `WINEPREFIX`). Got
-`BLHeliSuite32TestActivator.exe` running, but serial connect to a real ESC from inside it never
-worked (Wine's serial I/O emulation, not a hardware issue — this project's own tool connects to
-the same port instantly). **Not pursued further** — the real native-Linux app test fully
-superseded this path to Goal 4.
+1. **"Flash Selected ESC" confirmed to never write, on every real attempt (AK32 x2, Furling32
+   x1)** — full detail in `docs/knowledge/activation-licensing.md`. Root cause traced to the app's
+   own internal `TFlashState` logic (string evidence: `_FlashStateActivationFailed`,
+   `_FlashStateRevRemovedNeedUpdate`), confirmed unrelated to network/licensing (zero requests
+   beyond the harmless `status.php` ping, checked repeatedly with full packet capture + server
+   logs) and confirmed via raw USB `usbmon`/`tshark` capture (no `cmd_DeviceWrite` on the wire at
+   all). **Still unresolved**: what inside the app actually blocks the write — see open item 1.
+2. **RDP blocks `cmd_DeviceRead` below `0x7C00`, but `cmd_DeviceVerify` doesn't** — it never
+   transmits real content, only a match/mismatch signal, and this project confirmed live that the
+   oracle discriminates correctly even at Read-blocked addresses. Built `dump-firmware` (new CLI
+   command) on this: extracts app-code flash via Verify against candidate `.Hex` files, works for
+   any model/MCU (safe boundary derived from the candidates themselves, not a hardcoded address).
+   **Real bug found and fixed**: naive bisection produces non-256-aligned addresses, which produced
+   false mismatches against real hardware — fixed by stepping through aligned pages first. See
+   `docs/knowledge/protocol-reference.md`'s alignment note.
+3. **Furling32 confirmed at 98.8%** (23,520/23,808 app-code bytes) against its own `.Hex` test
+   candidate — `dumps/BLHeli32_Furling32 - Rev. 32.9.5 - AppCode_260906.bin`/`.hex`. Remaining 288
+   bytes are a genuine gap in the one candidate tried (`0x7AE0`–`0x7BFF`), not a real mismatch.
+   Closing it needs brute-force `discover_byte()` (built, works, ~11 hours at the measured
+   round-trip rate for that byte count) — **deferred**, not run.
+4. **AK32 confirmed impractical for the same technique**: only ~5% match against the three
+   non-official test-firmware candidates available (32.7.4/32.8.3/32.9.5) — no official 32.7
+   release candidate exists anywhere checked (GitHub history, local archives, OX32). Full recovery
+   would need brute-force across ~95% of the image — not realistic.
+5. **`testcode/` fully deprecated and removed** (user decision) — `BLHeli32_HexFiles/` (the app's
+   own folder) is now the sole working catalog, 1000+ `.Hex` files across every version/manufacturer
+   the user's archive holds. All docs/`AGENTS.md` references updated to match.
+6. **`dump-flash` renamed to `dump-info-page`** — clearer name (it only ever reads the `0x7C00`+
+   info page; the old name read as if it dumped all flash, which it never could).
+7. **`dump-setup --show-defaults CANDIDATE_HEX`** — new: the candidate `.Hex` file itself contains
+   a genuine decryptable factory-default Setup block (same XTEA key, `0x7C00`). Prints a per-field
+   real-vs-default comparison. Confirmed working against real captured plaintext.
+8. **OX32 (third-party web configurator) research**: confirmed independently, via its own client
+   JS, that a real BLHeli32 flasher can write without any `ERASE` command and without any
+   licensing/network call — see `research/notes/OX32-configurator-analysis.en.md`.
+9. **This project's own `write_flash()`/`page_erase()` built** (fourwayif.py) — hard-guarded to
+   never touch the bootloader (below `0x2000`, confirmed via every real firmware-update file
+   checked). **Never tested against real hardware** — erase-before-write semantics unconfirmed.
+10. **Furling32_4in1_C confirmed as a real 4th test board, MCU is GD32F350x6** (GigaDevice, not
+    STM32 — confirmed live via the Setup block's ESC_CPU field, offset `0x60`). Real firmware
+    32.9.0 against the closest available candidate (32.9.5, plus 32.8.3/32.7.4 as fallback) gave
+    **44.8%** (10,656/23,808 bytes) — a real middle-ground result between Furling32's 98.8% (exact
+    version match) and AK32's 5% (no close version available at all), consistent with the
+    "point-release drift" hypothesis (a later patch in a version line can share less code with an
+    earlier patch of the same line than expected). Saved:
+    `dumps/BLHeli32_Furling32_4in1_C - Rev. 32.9.5 - AppCode_260906.bin`/`.hex`.
+11. `_default_firmware_dump_name()` now defaults into `dumps/` (was landing in the project root
+    before this fix — caught live when the Furling32_4in1_C run's output appeared there instead).
+12. `dump-firmware`'s output filename is now derived from the REAL connected hardware's own
+    onboard identity string (`setup_fields.extract_identity_strings()`, new — reads the Setup
+    block's layout/MCU strings via delimiter search, not a fixed offset), not from the candidate
+    file guessed for comparison — the candidate might not even be the right model.
 
 ## Open items, in priority order
 
-1. **The big one**: decide Flash vs. hold on any of the now-staged boards (AK32, Furling32,
-   FOXEER Reaper, Furling32_4in1_C all currently have working test-firmware dropdowns). Needs the
-   user's explicit go-ahead on the firmware-loss trade-off before ever clicking "Flash Selected
-   ESC" — this is the actual next step toward capturing Goal 4's core deliverable (the real
-   ESC-activation network call).
-2. ~~Add the missing iptables redirect step to `docs/USAGE.md` §4~~ — **done**, plus fixed 2 other
-   stale open-question notes in USAGE.md (TLS trust confirmation) while there.
-3. ~~Add the unconditional 100ms `cmd_DeviceReset`→`cmd_DeviceInitFlash` wait to `connect_esc()`~~ —
-   **done** (`reset_settle_delay=0.1` param, `protocol/fourwayif.py`). **Not yet re-tested against
-   real hardware** (no board connected when added) — confirm it measurably helps next session.
-4. ~~Commit the 2026-09-04 code changes + today's doc updates~~ — **done**, `e662053`.
-5. Cross-version Setup-block field validation — **partially done**: field *names* compared across
-   all 4 boards (12/13 identical; `Eep_Pgm_Pwm_Freq` confirmed split into `_Hi`/`_Lo` on firmware
-   32.9+ — see `setup-block-fields.md`'s new section). **Byte offsets still not confirmed** on
-   non-AK32 firmware — needs a fresh `dump-setup` read via this project's own tool (the app's own
-   logs elide the Setup-block payload, `.ixi` files only have decoded values, not raw bytes).
-6. Broader `tcpdump -i any -n -s 0 'udp port 53 or tcp port 443'` capture during dropdown
-   interaction — requested but never completed; would confirm/rule out a second host for the
-   (recalled but unconfirmed) online firmware-catalog behavior from when blheli.org was live. Low
-   priority now that local loading is confirmed working via the file-based fix.
-7. MadsTech/MadRC "100 boot limit" video claim still unconfirmed (would need the actual video
-   transcribed).
-8. Cleanup (low priority, harmless to leave): the approval server process and
-   `/tmp/approval_server.log` are ephemeral, already gone. The `sudo iptables` rule and
-   `/etc/hosts` line added on this machine are still live — remove with `sudo iptables -t nat -D
-   OUTPUT -p tcp -d 127.0.0.1 --dport 443 -j REDIRECT --to-port 8443` and by deleting the
-   `blheli.org` line from `/etc/hosts`, whenever convenient.
+1. **Reverse-engineer/research the `status.php` response format** — the working theory going into
+   next session (per direct user instruction) is that our server's current response (an empty
+   body, an unverified guess, see `approval/codec.py`) might not be what actually needs to be sent
+   — the real "proceed to flash" signal might live in a differently-formatted `SERVER>key=value;`
+   response to this same endpoint, not a separate request. A static-strings pass on the compiled
+   app found no additional format hints; next step is either live experimentation (vary the
+   server's response body against real hardware and watch for a behavior change) or real
+   disassembly. **Do this on the bench AK32** (no VTX heat pressure), per user instruction.
+2. `write_flash()`/`page_erase()` need real-hardware testing before they're trustworthy — start
+   with a single small write attempt at a safe, non-bootloader address, with the user's fresh
+   explicit confirmation of the firmware-loss risk (standing rule, no exceptions).
+3. `enter_4way_if()` has zero retry logic (unlike `connect_esc()`'s 3-attempt/5.5s-delay design) —
+   today's session hit several `enter_4way_if` failures that a retry loop (matching
+   BLHeliSuite32xl's own 5-attempt default, 1–10 user-configurable) would likely absorb.
+4. Furling32's remaining 288-byte gap — `--discover-unresolved` is built and works, just never run
+   to completion (≈11 hours at the measured rate). Revisit only if it becomes worth the time.
+5. `docs/knowledge/DNS-dump.txt` (untracked) — a raw tcpdump paste already fully analyzed and
+   folded into `activation-licensing.md`'s findings; low standalone value, candidate for deletion
+   rather than committing as-is. Not decided.
 
 ## Next session start
 
-Re-read `docs/knowledge/activation-licensing.md`'s "Local firmware loading" section and
-`docs/knowledge/hardware-findings.md`'s crash-fix section, then pick: click "Flash Selected ESC"
-on a staged board (with the user's explicit fresh confirmation of the firmware-loss trade-off) to
-finally attempt capturing Goal 4's real activation call, or apply the two concrete low-risk fixes
-first (iptables doc, 100ms delay) while deciding.
+Re-read `docs/knowledge/activation-licensing.md` (TFlashState/no-network findings) and
+`docs/knowledge/protocol-reference.md` (Verify-oracle + alignment findings), then start with open
+item 1 (protocol research on the bench AK32) — that's the direct next step toward the actual Goal 4
+deliverable, not another hardware-dump exercise.
