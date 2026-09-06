@@ -1,0 +1,11 @@
+2024-06-03 BLHeli-END https://elmagnifico.tech/2024/06/03/BLHeli-END/
+2023-04-07 bi-directional-DSHOT https://elmagnifico.tech/2023/04/07/bi-directional-DSHOT/
+2021-12-09 BLH-Uart-Timeout https://elmagnifico.tech/2021/12/09/BLH-Uart-Timeout/
+2021-09-02 BLHeliSuite32-Reverse4 https://elmagnifico.tech/2021/09/02/BLHeliSuite32-Reverse4/
+2021-07-20 BLHeliSuite32-Reverse3 https://elmagnifico.tech/2021/07/20/BLHeliSuite32-Reverse3/
+2021-07-16 BLHeliSuite32-Reverse2 https://elmagnifico.tech/2021/07/16/BLHeliSuite32-Reverse2/
+2021-07-07 BLHeliSuite32-Reverse https://elmagnifico.tech/2021/07/07/BLHeliSuite32-Reverse/
+2020-06-12 BLHeli-Music https://elmagnifico.tech/2020/06/12/BLHeli-Music/
+2020-06-03 BLHeli-Uart-Usb-Protocol https://elmagnifico.tech/2020/06/03/BLHeli-Uart-Usb-Protocol/
+2020-06-03 Dshot-STM32-PWM-HAL https://elmagnifico.tech/2020/06/03/Dshot-STM32-PWM-HAL/
+2024-06-17 BLHeliSuite32-Reverse5 https://elmagnifico.tech/2024/06/17/BLHeliSuite32-Reverse5/

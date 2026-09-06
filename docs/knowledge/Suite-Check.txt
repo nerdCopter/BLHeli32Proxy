@@ -1,0 +1,27 @@
+Found Multiple ESC configuration:
+
+ESC# 1 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+[MASTER]
+(BLHeli32 Bootloader h)
+Input Protocol: DShot
+Input Frames Good: 360539 / Bad: 0
+
+ESC# 2 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+[SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader h)
+Input Protocol: DShot
+Input Frames Good: 360506 / Bad: 0
+
+ESC# 3 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+[SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader h)
+Input Protocol: DShot
+Input Frames Good: 360546 / Bad: 0
+
+ESC# 4 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+[SLAVE]
+(BLHeli32 Bootloader h)
+Input Protocol: DShot
+Input Frames Good: 360484 / Bad: 0

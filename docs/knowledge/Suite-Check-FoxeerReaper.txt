@@ -1,0 +1,23 @@
+Found Multiple ESC configuration:
+
+ESC# 1 : FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi [MASTER]
+(BLHeli32 Bootloader m)
+Input Protocol: DShot
+Input Frames Good: 1350886 / Bad: 0
+
+ESC# 2 : FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi [SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader m)
+Input Protocol: DShot
+Input Frames Good: 1350872 / Bad: 0
+
+ESC# 3 : FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi [SLAVE]
+(BLHeli32 Bootloader m)
+Input Protocol: DShot
+Input Frames Good: 1350819 / Bad: 0
+
+ESC# 4 : FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi [SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader m)
+Input Protocol: DShot
+Input Frames Good: 1350797 / Bad: 0

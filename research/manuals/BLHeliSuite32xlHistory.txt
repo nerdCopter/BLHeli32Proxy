@@ -1,0 +1,580 @@
+                           History of BLHeliSuite32xl Revisions
+
+Changes in 1.0.4.4:
+General:
+   • Added current BLHeli_32 manual.
+
+Changes in 1.0.4.3:
+General:
+   • Added the ability to edit and flash coming BLHeli_32 rev. 32.10.
+   • Minor fixes and improvements in the UI.
+External 4way-Interface (Arduino):
+   • Fix for 8Mhz interfaces not connecting the ESC bootloader.
+       Updated to interface version 2.0.0.0.7.
+
+Changes in 1.0.4.1:
+General:
+    • Preparatory works for the future use of themes.
+Interface “L”:
+    • Fixed FVT-Linker read/write failure, if log is enabled.
+
+Changes in 1.0.4.0:
+General:
+   • Fixed showing all server error messages as “Unknown Error”.
+
+Changes in 1.0.3.9:
+General:
+    • Fix for extraordinary slowness of progress(dialog) on some systems.
+    • Fix for the menu/combobox items dropping down on the wrong monitor, if running
+       the application on a secondary monitor.
+    • Minor fixes and improvements.
+External 4way-Interfaces:
+   • Fix for not working “Reboot F7 FC on disconnect”
+   • Improved handling of FCs with only one motor output (Fixed-Wing)
+
+Changes in 1.0.3.8:
+General:
+   • Fixed remote connection failure, due to certificate change.
+
+Changes in 1.0.3.7:
+General:
+   • Reduced, clearer menu display for beginners.
+   • Various fixes and improvements.
+
+Changes in 1.0.3.6:
+General:
+   • Fixed hex file selection.
+   • Fixed issues in dialog mechanics.
+
+Changes in 1.0.3.5:
+General:
+   • Added the ability to edit and flash shortly coming BLHeli_32 rev. 32.9.
+   • Improved stability of flash read and write operations, including resuming flashing
+      after a temporary power failure on the ESC.
+
+                                            -1-
+                           History of BLHeliSuite32xl Revisions
+
+   •   Improved handling of corrupted setup section.
+   •   Added Unicode character support for ESC name field.
+   •   Reworked Heartbeat handling.
+   •   Various improvements.
+   •   Firmware files are now loaded from remote.
+   •   Parameter default values are now updated from remote.
+
+Changes in 1.0.3.3 - 4:
+General:
+   • internal optimizations.
+
+Changes in 1.0.3.2:
+General:
+   • Added hex file for:
+       •   IFLIGHT_BLITZ_G071_01
+       •   MAMBA_F50_BL32_M16
+       •   Neutron_X-CLASS_12S
+       •   RUSH_BLADE_SPORT_V21
+       •   Skystars_BL32_KO60A_6s
+       •   SpeedyBee_4in1_V21
+       •   TEKKO32_F4_4in1_G
+       •   TEKKO32_F4_4in1_I
+       •   XILO_4in1_V2
+   •   Various fixes and improvements.
+External 4way-Interface:
+   • Added simple RPM noise test to “Motors” tab in “Expert Mode”.
+   • Added simple throttle linearity test to “Motors” tab in “Expert Mode”.
+   • Added option “automatic” for wait time after connect interface (automatic 0,
+       minimum 260ms, default 5000ms).
+
+Changes in 1.0.3.1:
+General:
+   • Added ability to Eep Layout rev. 48.
+
+Changes in 1.0.3.0:
+General:
+   • Added support for AT32F413 MCU.
+   • Added support for GD32E230 MCU.
+   • Bug fix for hanging start up music and making ESC unresponsive when playing note
+      “C(#)” (related to AT32F413/415 and firmware <= 32.8). (Replacing notes "C", "C#", "Db"
+       with note "D").
+
+Changes in 1.0.2.9:
+General:
+   • Added hex file for:
+       •   Firefly
+   •   Added improvement for AT32F421 MCU flashing procedure.
+External 4way-Interface:
+   • Added option for stetting wait time after connect interface to facilitate detecting of the
+       ESCs (minimum 260ms, default 5000ms).
+
+Changes in 1.0.2.8:
+
+                                             -2-
+                              History of BLHeliSuite32xl Revisions
+
+General:
+   • Added hex file for:
+       •   FOXEER_Reaper_4IN1_65A_96
+       •   FOXEER_Reaper_Mini_4IN1_45A_96
+       •   FOXEER_Reaper_Mini_4IN1_60A_96
+       •   TEKKO32_F4_4in1
+       •   TMOTOR_L4_01_96k
+       •   TMOTOR_T4_01
+   •   Replaced hex files for:
+       •   SpeedyBee_4in1_V2
+       •   RUSH_BLADE_SPORT_V2
+              (Please reflash 32.8 once with BLHeliSuite32xl/m 1.0.2.8 or later).
+
+Changes in 1.0.2.7:
+General:
+   • Fixed partial wrong language in dialog headings and buttons.
+
+Changes in 1.0.2.6:
+General:
+   • Added hex file for:
+       •   IFLIGHT_G071_8S
+       •   LeoGlider
+       •   LUXAIO
+       •   SpeedyBee_4in1_V2
+       •   TEKKO32_F4_45A_4in1
+   •   Improved Verify ESC handling (removed “ESC Tools… Verify flash memory” menu item, added
+       “Verify BLHeli” button, added suggestion to verify ESC before reflashing with the same revision) .
+   •   Added ability to Eep Layout rev. 47.
+   •   Fixed not starting under certain distributions with “error while loading shared
+       libraries: libcurl-gnutls.so.4: cannot open shared object file: No such file or directory“.
+
+Changes in 1.0.2.5:
+General:
+   • Added hex file for:
+       •   BETAFPV_20A_AT32
+       •   FOXEER_Reaper_4IN1_65A
+       •   IFLIGHT_G071_PRO
+       •   Master_F45_96K
+       •   Master_F55_96K
+       •   Master_F65_96K
+   •   Various minor Improvements.
+External 4way-Interface (BF):
+   • Added warning, if motor output protocol is set to disabled.
+
+Changes in 1.0.2.4:
+General:
+   • Added hex file for:
+       •   BETAFPV_20A_AT
+   •   Improved bootloader connection handshaking for interface “L”. Fixes: sometimes
+       connection fails if ESC is power cycled.
+External 4way-Interface:
+   • Added warning for not recent 4way-if versions, if no ESC found.
+
+Changes in 1.0.2.3:
+General:
+                                                   -3-
+                           History of BLHeliSuite32xl Revisions
+
+   • Fixed manual check for update: dialog did not show up, if update available.
+External 4way-Interfaces:
+   • Improved wait time for ESC connection after reset.
+   • Added parameter “Options… Connect ESC Retries …“ to improve reliable bootloader
+       connections.
+
+Changes in 1.0.2.2:
+General:
+   • Added hex file for:
+       •   FOXEER_Reaper_Mini_4IN1_60A
+       •   Hobbywing_XRotor_BLHeli32
+       •   iFlight_BL32_Hybrid
+       •   LBEES_43C
+       •   MAMBA_F60_BL32
+       •   Pro-Tronic_BF32_30A
+       •   RUSH_BLADE_SPORT_V2
+       •   T_Motor_AM66A
+   •   Added support for AT32F421 MCU.
+   •   Added “Cancel” option to verify process.
+   •   Various fixes and improvements.
+
+Changes in 1.0.2.1:
+General:
+   • Added approved 32.8 hex files.
+   • Added hex file for:
+       •   FL1_Megabolt_E
+       •   MAMBA_F50_BL32
+External 4way-Interface:
+   • Fix for: establishing connection with Ardupilot hangs, if Ardupilot parameters are not
+       configured appropriate.
+   • Increased wait time to 2.5 sec after connect interface to facilitate detecting of the ESCs
+       (optional off).
+
+Changes in 1.0.2.0:
+General:
+   • Added the ability to edit and flash BLHeli_32 rev. 32.8 (No 32.8 hex files added yet).
+   • Removed support for obsolete EagleTree MicroVector
+   • Minor improvements.
+
+Changes in 1.0.1.1:
+General:
+   • Added 32.7 hex file for:
+       •   IFLIGHT_G071_4IN1
+       •   MAMBA_RACE_F60_BL32
+       •   MAMBA_RACE_F75_BL32
+       •   SKYSTARS_BL32_NX45A_6s
+       •   SKYSTARS_BL32_NX60A_6s
+       •   SpeedyBee_4in1
+       •   ST_G0_02_96k
+       •   ST_L4_02_96k
+   •   Added checking for valid bootloader version number.
+External 4way-Interface:
+   • For better information, now showing up 4way-if version number in the Application
+       title bar.
+                                             -4-
+                             History of BLHeliSuite32xl Revisions
+
+   •   Improved connection establishment to FCs with Ardupilot.
+
+Changes in 1.0.1.0:
+General:
+   • Added 32.7 hex file for:
+       •   BETAFPV_20A_BLHeli_32
+       •   FOXEER_Reaper_Mini_4IN1_45A
+   • Added more upcoming MCU devices.
+External 4way-Interface (Arduino):
+   • Added device id range in order support further upcoming MCU devices.
+   •   Increased 4way-if version number to rev20.0.0.5 to indicate changes.
+       Please ensure to use Arduino/CF/BF interface versions which contains 4way-if code of rev20.0.0.5 or
+       higher in order to connect to upcoming MCU devices. (BF 4.2.5 and CF 4.2.2 contain 4way-if version
+       20.0.0.4)
+
+Changes in 1.0.0.9:
+General:
+   • fixed bug: “write failed” on Write Setup with different value than default for PWM
+      Frequency.
+
+Changes in 1.0.0.8:
+General:
+   • Added 32.7 hex file for:
+       •   CLRACING_STSPINA_V2
+       •   Furling32_4in1_C
+       •   TMOTOR_L4_01
+   •   Added workaround in “Motor” tab for Ardupilot (FC_VERSION < 3.3.1) missing
+       response on MSP_SET_MOTOR command.
+   •   Added warning message in “Motor” tab, if motor outputs are disabled.
+   •   Added the ability to edit and flash BLHeli_32 rev. 32.73 beta.
+   •   Further minor fixes and improvements.
+
+Changes in 1.0.0.7:
+General:
+   • fixed bug: Flashing or writing setup results in “Error writing flash” when using
+      interface “L”.
+
+Changes in 1.0.0.6:
+General:
+   • Added 32.7 hex file for:
+       ◦   IFLIGHT_8S_BLHeli32
+       ◦   LAL5_BLHeli_32
+       ◦   LANRC_BLHeli_32
+       ◦   RUSH_BLADE-SPORT
+   •   fixed: improvement of re-connection using FVT USB link worked only if logging was
+       enabled.
+   •   Improved: Detection and handling of future, not yet supported, MCU types.
+   •   Further minor fixes and improvements.
+
+Changes in 1.0.0.5:
+General:
+   • Added 32.7 hex file for:
+       ◦   Aocoda_32Bit_60A
+       ◦   Aikon_AK32_4IN1_35A_6S_V3_0
+                                                  -5-
+                         History of BLHeliSuite32xl Revisions
+
+       ◦   AIKON_AK32PRO_50A_4IN1_MINI_6S
+       ◦   AK32PIN_4IN1_6S_25A_V2
+       ◦   BETAFPV_12A_BLHeli_32
+       ◦   DARWIN_F0_40
+       ◦   Eachine_ESC
+       ◦   Eagle32
+       ◦   HellCat32-1_0
+       ◦   HGLRC_Zeus_ESC
+       ◦   MAMBA_F40_MINI_PRO
+       ◦   Pro-Tronic_BF32_18A
+       ◦   Pro-Tronic_BF32_23A
+       ◦   RUSH_BLADE_SPEED
+       ◦   RUSH_BLADE_SUPER
+       ◦   SKYSTARS_KRAMAM32_40A_6s
+       ◦   SKYSTARS_KRAMAM32_45A_6s
+       ◦   SKYSTARS_KRAMAM32_55A_6s
+       ◦   SKYSTARS_KRAMAM32_60A_6s
+       ◦   ST_L4_02
+       ◦   Tekko32_F3_C
+       ◦   XILO_ESC_B
+   •  improved re-connection using FVT USB link after unplugging.
+   •  Minor internal improvements.
+“Make interfaces” tab:
+  • Added differentiation for Arduino Nano with old and new bootloader baud rate.
+
+Changes in 1.0.0.4:
+General:
+   • Added 32.7 hex file for:
+       ◦   Aikon_AK32_4IN1_55A_6S_V3_0
+       ◦   Flycolor_X-Cross_HV
+       ◦   HAKRC_603
+       ◦   RUSH_BLADE_SPORT
+       ◦   T_Motor_F45A_4IN1_Mini
+       ◦   TEKKO32_F3_B
+   •   Minor fixes and improvements.
+
+Changes in 1.0.0.3:
+General:
+   • Added 32.7 hex file for:
+       ◦   Furling32_4in1_B
+       ◦   Razor4in1_B
+       ◦   TEKKO32_F3_4in1_B
+       ◦   TEKKO32_F3_Metal_B
+External 4way-Interface (iNavFlight):
+   • Added fix for unable to connect due to MSP_MOTOR_CONFIG not available in inav.
+
+Changes in 1.0.0.2:
+General:
+   • Added 32.7 hex file for:
+       ◦   AK32PIN_4IN1_6S_35A_V2
+       ◦   BETAFPV_35A_BLHeli_32
+       ◦   FL1_Afterburner
+       ◦   HIFIONRC_BLHeli32
+       ◦   MARS32_25A
+       ◦   T_Motor_F30A_4IN1
+       ◦   T_Motor_F35A_BLHeli32_V1_1_S
+
+
+                                          -6-
+                            History of BLHeliSuite32xl Revisions
+
+   •   Fix for Access violation on enumeration of certain HID devices when selecting
+       interface “K” or “L”.
+   • Minor fixes and improvements.
+   • Added detection for BLHeli/_S 8 bit ESCs.
+External 4way-Interface (Betaflight/et al.):
+   • Adapted MSP_API level 1.42
+   • Reworked functions in “Motors” tab.
+   • Added telemetry data support in “Motors” tab.
+
+Changes in 1.0.0.1:
+General:
+   • Added 32.7 hex file for:
+       ◦   CRATER_ESC
+       ◦   FL1_Megabolt_C
+       ◦   Helsel_EKUAT
+   •   Various minor fixes in GUI.
+External 4way-Interface (Betaflight/et al.):
+   • Added workaround fix for flooding MSP port with MSP_DISPLAYPORT under
+       specific circumstances.
+
+Changes in 1.0.0.0:
+General:
+   • Fixes for handling PWM frequency defaults > 48khz.
+
+Changes in beta 0.9.2.0:
+General:
+   • Added 32.7 hex file for:
+       ◦   RCTimer_Ares_60A
+   •   Fixed: Com port device failures while write/verify flash. Mostly discovered with
+       CH340 USB/UART (Arduino Nano) devices on specific systems (OS and/or USB
+       hardware dependent).
+
+Changes in beta 0.9.1.9:
+General:
+   • Added 32.7 hex file for:
+       ◦   FL1_Megabolt
+       ◦   MAMBA_F50PRO
+       ◦   ZeeZ60A
+   •   Added ability to reload new hex files online.
+   •   Added ESC verification feature to “ESC flash” tab.
+
+Changes in beta 0.9.1.8:
+General:
+   • Added 32.7 hex file for:
+       ◦   Emax_Formula_65A
+       ◦   FLYWOO_GOKU32_PRO
+       ◦   Forward_F3_ESC
+       ◦   Furling32_A
+       ◦   WINGTRA
+   •   Fix: Added SBUS to valid input protocols.
+   •   Fixed exception handling while scanning serial ports (caused crashes on certain systems).
+External 4way-Interface (Arduino/Cleanflight/Betaflight/et al.):
+
+
+                                               -7-
+                           History of BLHeliSuite32xl Revisions
+
+   •   Added repeating of command after ACK_I_UNKNOWN_ERROR response to
+       improve workaround for USB connection issues.
+
+Changes in beta 0.9.1.7:
+General:
+   • Added 32.7 hex file for:
+       ◦   MAMBA_F50_PRO
+       ◦   MAMBA_F60_PRO
+   •   Added the ability to edit and flash BLHeli_32 rev. 32.71 beta.
+   •   Improved reaction for ESC disconnection/reconnection from power supply.
+
+Changes in beta 0.9.1.6:
+External 4way-Interface (Arduino):
+   • Fix “Arduino Mega unable to connect” by limiting DTR and RTS active for FC
+       interfaces only.
+
+Changes in beta 0.9.1.5:
+General:
+   • Added 32.7 hex file for:
+       ◦   Lumenier_Razor_4in1
+       ◦   Racerstar_TaiChi_ESC
+   •   Improved flash handling for ESCs.
+   •   Setting DTR and RTS active whenever opening a com port.
+
+Changes in beta 0.9.1.4:
+General:
+   • Added 32.7 hex file for:
+       ◦   FL1
+       ◦   FLYWOO_GOKU406S_PRO
+       ◦   Infinity_40A
+External 4way-Interface (Arduino):
+   • Bugfix for overly tight timeout, especially with regard to the use of the Arduino UNO.
+
+Changes in beta 0.9.1.3:
+General:
+   • due to libcurl3/libcurl4 conflict, a split into legacy (marked as legacy) and regular
+      version was needed.
+      • regular uses libcurl4, which is available on Ubuntu 19 etc.
+      • if regular does not start, use legacy version (Ubuntu 16 etc).
+   • Fix for Debian 10 size issue.
+
+Changes in beta 0.9.1.2:
+General:
+   • Added support for Ubuntu 19.04.
+
+Changes in beta 0.9.1.1:
+General:
+   • improved detection of com port device removal from USB.
+
+Changes in beta 0.9.1.0:
+General:
+   • Added new “ESC Flash” tab.
+
+                                             -8-
+                             History of BLHeliSuite32xl Revisions
+
+   •   Added approved 32.7 hex files.
+   •   Minor fixes and improvements.
+
+Changes in beta 0.9.0.9:
+General:
+   • Added the ability to edit and flash BLHeli_32 rev. 32.7 (No 32.7 hex files added yet).
+   • Added 32.6 hex file for:
+       ◦   CLRACING_STSPINA
+       ◦   TRANSTECN_50A
+   •   Fixed not showing progress value while ESC calibration.
+   •   Minor fixes and improvements.
+
+Changes in beta 0.9.0.8a:
+General:
+   • Added 32.6 hex file for:
+       ◦   FL1_F3
+       ◦   Forward_L4_ESC
+       ◦   HGLRC_T-REX_32bit_ESC
+       ◦   LBEES_43
+       ◦   RUSH_MATRIX_30A
+       ◦   SkyStars-40A-Slim-F3
+       ◦   Spedix_Mini_GS_40F_4IN1
+       ◦   TEKKO32_F3
+
+Changes in beta 0.9.0.8:
+General:
+   • Added 32.6 hex file for:
+       ◦   Aikon_RD32_45A_4IN1_6S_V1_0
+       ◦   BETAFPV-16A-32bit-V2_0
+       ◦   MARS32_100A
+       ◦   Spedix_LS40A_Slim_V1_1
+   •   Minor fixes and improvements.
+
+Changes in beta 0.9.0.7:
+External 4way-Interface (Ardupilot only):
+   • Added workaround fix for usage with interface “K” and “M”.
+       ◦   Removed warning about outdated interface version for interface “K”.
+       ◦   Removed heartbeat connection check for interface “K”.
+       ◦   Removed cmd_DeviceInitFlash after “general error” answer on cmd_DeviceReset for ESC
+           presence checking for interface “K”, to speed up skipping of unused channels.
+       ◦   Excluded unsupported MSP_BOXIDS command usage for interface “M”.
+       ◦   Added 2 sec timeout for cmd_DeviceReset and cmd_DeviceInitFlash to compensate excessive first
+           ESC command delay after Connect.
+
+Changes in beta 0.9.0.6:
+General:
+   • Added capability to handle BLHeli_32 rev. 32.64 Beta.
+       ◦   Programmable “Stall Protection”.
+   •   Visual improvements in “ESC Setup” page.
+   •   Minor fixes and improvements.
+
+Changes in beta 0.9.0.5:
+General:
+   • Added 32.6 hex file for:
+       ◦   FLYWOO_INI32_PRO
+
+                                                -9-
+                            History of BLHeliSuite32xl Revisions
+
+       ◦   MAMBA_25A
+       ◦   MAMBA_306
+       ◦   MAMBA_506
+       ◦   T_Motor_F55A_4IN1_PRO_V2_F3
+   •   Improved parameter layout revision check.
+   •   Improved handling of “invalid” or “flash failed” marked ESC in “Read Setup” and
+       “Check” procedures.
+   •   Improved automatic serial port scanning.
+   •   Improved visual parameter layout.
+   •   Various minor fixes and improvements.
+
+Changes in beta 0.9.0.4:
+General:
+   • Added 32.6 hex file for:
+       ◦   BETAFPV-16A-32bit-V1_1
+       ◦   TEKKO32_4in1
+       ◦   VIVAFPV_45A_BL32
+   •   Improved handling of ESC write/verify errors by repeating block operations.
+   •   Improved handling of ESC “Read Setup” and “Check” procedures.
+   •   Changed default screenshot image type to png.
+   •   Improved Logging functionality, including save to and load from file.
+
+Changes in beta 0.9.0.3:
+General:
+   • Added 32.6 hex file for:
+       ◦   Aikon_AK32_4IN1_55A_6S_V1_0
+       ◦   iFlight-35A-BLHeli_32
+       ◦   Neuron_40
+       ◦   PYRO-32F3
+       ◦   ReadyToSky_32
+       ◦   Spedix_GS45A_4IN1_V1_1
+       ◦   T_Motor_F45A_4IN1_V2
+       ◦   T_Motor_F55A_4IN1_PRO_V2
+       ◦   XILO_ESC
+   •   Added handling for falsely added BOM UTF-8 in external hex files.
+   •   Added basic workaround for alignment handling under Elementary OS.
+   •   Added basic workaround to improved performance of log function.
+External 4way-Interface (Cleanflight/Betaflight/et al.):
+   • Added workaround for Betaflight VCP multiple of 64 byte read failure bug with F7
+       FC boards.
+   • Added basic compatibility verification of FC variants with Motor tab functions.
+   • Added Error handling for msp error sign (“|”) currently used by dRonin.
+
+Changes in beta 0.9.0.2:
+General:
+   • Fixed exception on open Music editor dialog for single seclected ESC > #1.
+   • Fixed load error for sym links to openssl1.1.
+
+Changes in beta 0.9.0.1:
+General:
+   • Fixed exception on close Music editor dialog.
+
+Initial beta release 0.9.0.0:
+
+                                           - 10 -
+History of BLHeliSuite32xl Revisions
+
+
+
+
+               - 11 -
+

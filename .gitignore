@@ -1,0 +1,33 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Firmware/config dumps extracted via this project's own tooling (probe-flash,
+# dump-flash, dump-setup). Excluded for now, not permanently: the project intent
+# (PLAN.md §8) is to eventually PUBLISH reproducibly-verified official firmware
+# dumps as a public community resource, once that reproducibility is confirmed —
+# this exclusion should be revisited deliberately at that point, not left as a
+# default. See dumps/README.md.
+dumps/*.bin
+dumps/*.hex
+
+# BLHeli's own copyrighted test-firmware binaries (see testcode/README.md for how to
+# populate this folder yourself from the official upstream repo) — never bundled here.
+testcode/*.Hex
+testcode/*.hex
+testcode/*.bin
+
+# Local secrets/state
+.blheli32proxy/
+*.pcap
+*keylog*.txt
+
+# This project tracks its own AI-instruction files (referenced from README.md/PLAN.md),
+# overriding the user's global ~/.gitignore exclusion of them.
+!AGENTS.md
+!CLAUDE.md

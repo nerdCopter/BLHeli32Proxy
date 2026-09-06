@@ -1,0 +1,27 @@
+Found Multiple ESC configuration:
+
+ESC# 1 : Furling32_4in1_C - Rev. 32.9 - Multi
+[MASTER]
+(BLHeli32 Bootloader k)
+Input Protocol: DShot
+Input Frames Good: 6327 / Bad: 8
+
+ESC# 2 : Furling32_4in1_C - Rev. 32.9 - Multi
+[SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader k)
+Input Protocol: DShot
+Input Frames Good: 6287 / Bad: 8
+
+ESC# 3 : Furling32_4in1_C - Rev. 32.9 - Multi
+[SLAVE]
+Motor Direction: Reversed
+(BLHeli32 Bootloader k)
+Input Protocol: DShot
+Input Frames Good: 6276 / Bad: 8
+
+ESC# 4 : Furling32_4in1_C - Rev. 32.9 - Multi
+[SLAVE]
+(BLHeli32 Bootloader k)
+Input Protocol: DShot
+Input Frames Good: 6280 / Bad: 8

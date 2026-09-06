@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="ocEyzgQixcMwLGcR5yegd7v1cTQsH0TV3h4JLlokIIs" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="全栈、后端、嵌入式、maya与游戏 | elmagnifico， Full Stack Engineer & Back-end Engineer & Embedded System Lover | 这里是elmagnifico的个人博客，君子之交淡如水。">
+    <meta name="keywords" content="elmagnifico,全栈,后端,嵌入式,maya,游戏,C,C++,Python,C#,JAVA,树莓派,路径规划,无人机,集群,vps,blog,springboot,STM32,nintendo switch,硬件,game,DIY">
+    <meta name="theme-color" content="#000000">
+
+    <title>由于制裁，BLHeli停止开发，所有ESC产品停止支持 - elmagnifico's blog</title>
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://elmagnifico.tech/2024/06/03/BLHeli-END/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/blog.min.css">
+
+    <!-- Pygments Github CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+
+    
+
+    <!-- top processbar -->
+    <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="/css/style.css" rel="stylesheet"></noscript>
+
+    <link href="/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+    
+    <link rel="stylesheet" href="/css/search-pagefind.css">
+    <link rel="stylesheet" href="/css/search-cjk-fallback.css">
+    <link href="/pagefind/pagefind-component-ui.css" rel="stylesheet">
+    
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.0/html5shiv.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    
+
+<!-- Navigation -->
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top" data-pagefind-ignore>
+    <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Elmagnifico's Blog</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div id="blog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    
+
+                    <li>
+                        <a href="/">Home</a>
+                    </li>
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    <li>
+                        <a href="/tags/">Tags</a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a href="/about/">About</a>
+                    </li>
+                    
+                    
+                    <li class="nav-search-item">
+                        <a href="#" class="nav-search-link" id="blog-nav-search" role="button" aria-label="搜索文章" title="搜索文章 (Ctrl+K)">
+                            <i class="fa fa-search" aria-hidden="true"></i>
+                            <span class="nav-search-text">搜索</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+    <!-- /.container -->
+</nav>
+<script>
+    // Drop Bootstarp low-performance Navbar
+    // Use customize navbar with high-quality material design animation
+    // in high-perf jank-free CSS3 implementation
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#blog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    var __HuxNav__ = {
+        close: function(){
+            $navbar.className = " ";
+            // wait until animation end.
+            setTimeout(function(){
+                // prevent frequently toggle
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        },
+        open: function(){
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+
+    // Bind Event
+    $toggle.addEventListener('click', function(e){
+        if ($navbar.className.indexOf('in') > 0) {
+            __HuxNav__.close()
+        }else{
+            __HuxNav__.open()
+        }
+    })
+
+    /**
+     * Since Fastclick is used to delegate 'touchstart' globally
+     * to hack 300ms delay in iOS by performing a fake 'click',
+     * Using 'e.stopPropagation' to stop 'touchstart' event from 
+     * $toggle/$collapse will break global delegation.
+     * 
+     * Instead, we use a 'e.target' filter to prevent handler
+     * added to document close HuxNav.  
+     *
+     * Also, we use 'click' instead of 'touchstart' as compromise
+     */
+    document.addEventListener('click', function(e){
+        if(e.target == $toggle) return;
+        if(e.target.className == 'icon-bar') return;
+        __HuxNav__.close();
+    })
+</script>
+
+
+    <!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/img/x7.jpg')
+    }
+
+    
+</style>
+<header class="intro-header" >
+    <div class="header-mask"></div>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/#BLHeli" title="BLHeli" data-pagefind-meta="tag">BLHeli</a>
+                        
+                    </div>
+                    <h1 data-pagefind-meta="title">由于制裁，BLHeli停止开发，所有ESC产品停止支持</h1>
+                    
+                    
+                    <h2 class="subheading" data-pagefind-meta="subtitle">制裁，BLHeli逆向，电调，ESC</h2>
+                    
+                    <span id="busuanzi_container_page_pv">Views:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;times</span>
+                    
+                    <span class="meta">Updated on June 8, 2024</span>
+                    
+                    <span class="meta">Posted by elmagnifico on June 3, 2024</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container" data-pagefind-body>
+
+				<h2 id="foreword">Foreword</h2>
+
+<p>前段时间刚参加完无人机展会，各种为战争服务的无人机，百花齐放，热闹程度远超前几年，没想到刚转头，无人机行业就又被打击了</p>
+
+<h2 id="blheli被制裁">BLHeli被制裁</h2>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406040959986.png" alt="image-20240604095924947" /></p>
+
+<p>简单说由于BLHeli广泛被无人机使用，搭载BLH的ESC并不能确定最终用途，所以整个BLH数据被禁止出口，包括BLH自身收款的银行都受到了影响，所以BLH停止开发和维护了。</p>
+
+<ul>
+  <li>实际上BLH是先停止，然后才发出来相关公告</li>
+</ul>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080140878.png" alt="image-20240608014007781" /></p>
+
+<p>BLH大概在无人机市场里占90%，一个无人机就至少要搭载4个BLH电调，全世界大部分电调厂商都在国内，每年出货量大概几百上千万，BLH认可度之高，远超想象。</p>
+
+<p>最初BLH大概是在2013年上线的，一上线就开源，其优异的性能和相对低廉的价格，一下就爆火了。而BLH初代还是8bit的单片机，成本低，性能也相对弱一些，随着时代的发展，16bit单片机本身发展不太好，被跳过去了，直接进入了32bit时代，BLH在初期估计是给各个制造商做技术支持，只是挣了点小钱。从2017年开始BLH进入32位时代，开始闭源，对应的所有new features都加在了32位上，8位停止维护。</p>
+
+<p>8位电调依然可以使用，而且很多低性能领域都可以用，每年依然有不小的出货量。对应的32位电调，BLH开始针对各个制造商，对激活BLH固件的电调开始收费，大概在1RMB左右。</p>
+
+<p>BLH就算什么都不开发，每年估计也能躺赚几百万，而市面上的竞争对手，抱歉，基本没有，8位的强有力的竞争对手大概20年才有（JESC BlueJay），32位的21年才有（AM32），闭源的选手有很多（SimonK，Kiss等），不过都不怎么火，而且他们的电调往往和自己的飞控要一起使用才能得到比较好的效果。</p>
+
+<p>社区反应比我想象的要慢一点</p>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/743</p>
+</blockquote>
+
+<p><strong>由于服务器关闭了，很多人刚买的电调可能是有问题的版本，无法正常升级了</strong></p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080150415.png" alt="image-20240608015029387" />、</p>
+
+<p>作者表示他们还在获取许可中</p>
+
+<h3 id="破局">破局</h3>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080146966.png" alt="image-20240608014614914" /></p>
+
+<p>BLH的认证模式是购买对应数量的Licenses，每激活一个电调会消耗一个，制造商都是前期一次性买n个，一次性支付n*m美刀，而此次停止维护，是直接在制造商还未使用完Licenses的情况下，就停止了服务，有的制造商手上可能还有几十万次激活未被消耗。</p>
+
+<p>与正式激活相对的，BLH也有测试版本，测试版本是只有100次上电工作的限制，使用完以后就无法使用了。想都不用想这种测试版，必然是在FLASH中写入了一个使用次数，而这个次数大概率是很容易逆向的。BLH主要是在BOOT阶段进行的校验和限制，所以要突破这一层，在这里做点手脚应该就行了，主要是针对固件的HACK（据说后来的测试版没有联网和次数限制，似乎可以长期使用）</p>
+
+<p>BLH本身的上位机是Delphi写的，也没有做什么非常严格的加密或者保护，上位机这里也有突破口。</p>
+
+<p>激活需要服务器，粗看了一下BLH用了https，所以这里要从接口上破解，需要先把https的接口给他逆向了，让他可以使用非https进行传输，然后直接抓包看接口请求是什么就行了。唯一的问题BLH的服务停了，不知道具体返回什么内容，需要结合上位机一起看回包内容。</p>
+
+<p>这样劫持https就能做出来一个无感的上位替代版本</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406032150528.png" alt="image-20240603215033492" /></p>
+
+<p>国内制造商飞盈佳乐，直接打出一记，让我来开发，如果BLH作者敢头铁，直接把32位代码开源，那估计他人马上就没了</p>
+
+<h2 id="替代者">替代者</h2>
+
+<p>BLH32不开源，同时由于电调本身代码是汇编写的，基本就劝退了大部分人了，就算他开源了，也很少有人能修改，更别说适配其他MCU什么的了。</p>
+
+<p>这次BLH停止维护，那么对应的开源社区的电调将迎来新生，比较有名的就是AM32和BlueJay</p>
+
+<p>同样的AM32和BlueJay相对应用还是太少了，很多人对于他们的稳定性还是怀疑的，毕竟这是电调，出了一点问题就是坠机，BLH长达十一年的统治地位靠的就是稳定</p>
+
+<h3 id="上位替代am32">上位替代：AM32</h3>
+
+<blockquote>
+  <p>https://github.com/am32-firmware/AM32</p>
+</blockquote>
+
+<p>AM32相对还是比较小众的，支持的MCU比较少，但是有一部分电调是和BLH完全兼容的，但是当下阶段如果切换到AM32，那就再也不能切换回BLH了，你没有激活权限了</p>
+
+<h3 id="下位替代bluejay">下位替代：BlueJay</h3>
+
+<blockquote>
+  <p>https://github.com/mathiasvr/bluejay</p>
+</blockquote>
+
+<p>蓝鸟电调，他继承了BLH的8位电调，发扬光大，大部分32位电调的new features都移植过来了</p>
+
+<p>不过比起来，依然在某些性能上是不如BLH的</p>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/744</p>
+</blockquote>
+
+<h2 id="summary">Summary</h2>
+
+<p>归根到底和俄乌战争脱不了干系，相信过不了几天老毛子就把他破了，更别说我看到这个消息发出来的人就叫<code class="language-plaintext highlighter-rouge">just hack it</code></p>
+
+<p>对于开源的AM32和BlueJay，如果形式愈演愈烈，可能他们也会被迫删库</p>
+
+<p>制裁无人机没水平，直接制裁电调，这就让当前市场上给俄乌供货的制造商瞬间吃瘪，更别提其他正常使用的电调，DIY玩家用的电调，目前都被卡了不少货，这个事情已经发生一周了，今天才刚被曝出来，不知道国内其他几家做电调业务的现在打算怎么办。</p>
+
+<h2 id="quote">Quote</h2>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/743</p>
+
+  <p>https://www.youtube.com/watch?v=GU0RoH_Pof0</p>
+
+  <p>https://www.youtube.com/watch?v=_PNuWXgYV74</p>
+
+  <p>https://www.youtube.com/watch?v=AuBHXlWeUVc&amp;ab_channel=JustHackIt</p>
+
+  <p>https://www.facebook.com/share/p/tDjAETkfQXyj4kF4/</p>
+
+  <p>https://oscarliang.com/am32-esc-firmware-an-open-source-alternative-to-blheli32/</p>
+</blockquote>
+
+
+                <hr style="visibility: hidden;">
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2024/05/30/Glyphica/" data-toggle="tooltip" data-placement="top" title="Glyphica: Typing Survival 短评">
+                        Previous<br>
+                        <span>Glyphica: Typing Survival 短评</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2024/06/09/AbioticFactor/" data-toggle="tooltip" data-placement="top" title="Abiotic Factor开服指南">
+                        Next<br>
+                        <span>Abiotic Factor开服指南</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- disqus 评论框 start -->
+                <div class="comment">
+                    <div id="disqus_thread" class="disqus-thread"></div>
+                </div>
+                <!-- disqus 评论框 end -->
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#RaspberryPi" title="RaspberryPi" rel="9">
+                                    RaspberryPi
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#嵌入式" title="嵌入式" rel="30">
+                                    嵌入式
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Git" title="Git" rel="7">
+                                    Git
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#脚本" title="脚本" rel="2">
+                                    脚本
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#python" title="python" rel="19">
+                                    python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#LeetCode" title="LeetCode" rel="30">
+                                    LeetCode
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#C++" title="C++" rel="10">
+                                    C++
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#APM" title="APM" rel="2">
+                                    APM
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#FreeRTOS" title="FreeRTOS" rel="26">
+                                    FreeRTOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Markdown" title="Markdown" rel="5">
+                                    Markdown
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Embedded" title="Embedded" rel="30">
+                                    Embedded
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#SD" title="SD" rel="2">
+                                    SD
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Linux" title="Linux" rel="2">
+                                    Linux
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Vim" title="Vim" rel="2">
+                                    Vim
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Ubuntu" title="Ubuntu" rel="2">
+                                    Ubuntu
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tools" title="Tools" rel="8">
+                                    Tools
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#STM32" title="STM32" rel="17">
+                                    STM32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Maya" title="Maya" rel="22">
+                                    Maya
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LPWAN" title="LPWAN" rel="3">
+                                    LPWAN
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Graph Theory" title="Graph Theory" rel="3">
+                                    Graph Theory
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Algorithm" title="Algorithm" rel="4">
+                                    Algorithm
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#PathFind" title="PathFind" rel="14">
+                                    PathFind
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OMPL" title="OMPL" rel="7">
+                                    OMPL
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#VPS" title="VPS" rel="33">
+                                    VPS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QT" title="QT" rel="3">
+                                    QT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Router" title="Router" rel="2">
+                                    Router
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JS" title="JS" rel="2">
+                                    JS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Chrome" title="Chrome" rel="2">
+                                    Chrome
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tampermonkey" title="Tampermonkey" rel="2">
+                                    Tampermonkey
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#API" title="API" rel="3">
+                                    API
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Java" title="Java" rel="6">
+                                    Java
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Spring" title="Spring" rel="2">
+                                    Spring
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#MySql" title="MySql" rel="2">
+                                    MySql
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Springboot" title="Springboot" rel="8">
+                                    Springboot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Docker" title="Docker" rel="3">
+                                    Docker
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#V2ray" title="V2ray" rel="5">
+                                    V2ray
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#TTRSS" title="TTRSS" rel="2">
+                                    TTRSS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Nintendo Switch" title="Nintendo Switch" rel="12">
+                                    Nintendo Switch
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Trace" title="Trace" rel="3">
+                                    Trace
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Crack" title="Crack" rel="11">
+                                    Crack
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#BLHeli" title="BLHeli" rel="10">
+                                    BLHeli
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#DSHOT" title="DSHOT" rel="2">
+                                    DSHOT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ESC" title="ESC" rel="2">
+                                    ESC
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Music" title="Music" rel="5">
+                                    Music
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C#" title="C#" rel="5">
+                                    C#
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#EasyCon" title="EasyCon" rel="8">
+                                    EasyCon
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blog" title="Blog" rel="6">
+                                    Blog
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#杂谈" title="杂谈" rel="6">
+                                    杂谈
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Proxy" title="Proxy" rel="4">
+                                    Proxy
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#UAV" title="UAV" rel="3">
+                                    UAV
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#GuinnessWorldRecords" title="GuinnessWorldRecords" rel="3">
+                                    GuinnessWorldRecords
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NAS" title="NAS" rel="3">
+                                    NAS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#群晖" title="群晖" rel="3">
+                                    群晖
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ZeroTier" title="ZeroTier" rel="3">
+                                    ZeroTier
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Typora" title="Typora" rel="3">
+                                    Typora
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Map" title="Map" rel="2">
+                                    Map
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#旅游" title="旅游" rel="15">
+                                    旅游
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Log" title="Log" rel="2">
+                                    Log
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JSON" title="JSON" rel="2">
+                                    JSON
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Cython" title="Cython" rel="2">
+                                    Cython
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Equip" title="Equip" rel="16">
+                                    Equip
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Goods" title="Goods" rel="8">
+                                    Goods
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Share" title="Share" rel="5">
+                                    Share
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DMX512" title="DMX512" rel="2">
+                                    DMX512
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blender" title="Blender" rel="3">
+                                    Blender
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Game" title="Game" rel="32">
+                                    Game
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#AP" title="AP" rel="3">
+                                    AP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Network" title="Network" rel="10">
+                                    Network
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#CloudFlare" title="CloudFlare" rel="2">
+                                    CloudFlare
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DIY" title="DIY" rel="5">
+                                    DIY
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#WIFI" title="WIFI" rel="2">
+                                    WIFI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Camera" title="Camera" rel="2">
+                                    Camera
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Life" title="Life" rel="2">
+                                    Life
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Diablo" title="Diablo" rel="10">
+                                    Diablo
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Sensor" title="Sensor" rel="2">
+                                    Sensor
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SES" title="SES" rel="6">
+                                    SES
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QQ" title="QQ" rel="3">
+                                    QQ
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Bot" title="Bot" rel="3">
+                                    Bot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Python" title="Python" rel="7">
+                                    Python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Vmq" title="Vmq" rel="2">
+                                    Vmq
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Jenkins" title="Jenkins" rel="4">
+                                    Jenkins
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#米家" title="米家" rel="8">
+                                    米家
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ESP32" title="ESP32" rel="6">
+                                    ESP32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Software" title="Software" rel="5">
+                                    Software
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C" title="C" rel="4">
+                                    C
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MT793x" title="MT793x" rel="5">
+                                    MT793x
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NXP" title="NXP" rel="4">
+                                    NXP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CH32" title="CH32" rel="2">
+                                    CH32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OpenWrt" title="OpenWrt" rel="4">
+                                    OpenWrt
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Onion" title="Onion" rel="2">
+                                    Onion
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Copilot" title="Copilot" rel="2">
+                                    Copilot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Cursor" title="Cursor" rel="6">
+                                    Cursor
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Investment" title="Investment" rel="2">
+                                    Investment
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ChatGPT" title="ChatGPT" rel="4">
+                                    ChatGPT
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SFX" title="SFX" rel="2">
+                                    SFX
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Debug" title="Debug" rel="2">
+                                    Debug
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#RouterOS" title="RouterOS" rel="5">
+                                    RouterOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Mikrotik" title="Mikrotik" rel="5">
+                                    Mikrotik
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#GitLab" title="GitLab" rel="2">
+                                    GitLab
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Drone" title="Drone" rel="2">
+                                    Drone
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#OpenAI" title="OpenAI" rel="4">
+                                    OpenAI
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#VS Code" title="VS Code" rel="4">
+                                    VS Code
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#管理" title="管理" rel="6">
+                                    管理
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#build" title="build" rel="6">
+                                    build
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Kconfig" title="Kconfig" rel="5">
+                                    Kconfig
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CMake" title="CMake" rel="6">
+                                    CMake
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Su7 Ultra" title="Su7 Ultra" rel="14">
+                                    Su7 Ultra
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Car" title="Car" rel="14">
+                                    Car
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#AI" title="AI" rel="19">
+                                    AI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MCP" title="MCP" rel="3">
+                                    MCP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LLM" title="LLM" rel="2">
+                                    LLM
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Art" title="Art" rel="3">
+                                    Art
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#审美" title="审美" rel="3">
+                                    审美
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Skills" title="Skills" rel="2">
+                                    Skills
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Agent" title="Agent" rel="7">
+                                    Agent
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="https://blog.l0v0.com/">智伤帝</a></li>
+                    
+                        <li><a href="http://smilejing.cn/">小静的博客</a></li>
+                    
+                        <li><a href="https://blog.whuzfb.cn/">晨曦的博客</a></li>
+                    
+                        <li><a href="https://hiripple.com/">hiRipple</a></li>
+                    
+                        <li><a href="https://www.gaicas.com/">草东日记</a></li>
+                    
+                        <li><a href="https://molunerfinn.com/">MARKSZのBlog</a></li>
+                    
+                        <li><a href="http://等你成为我的朋友">等你成为我的朋友</a></li>
+                    
+                        <li><a href="http://Wait for you">Wait for you</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+<!-- add support for mathjax -->
+
+
+<!-- add support for mermaid -->
+
+
+
+<!-- disqus 公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES * * */
+    var disqus_shortname = "elmagnifico-1";
+    var disqus_identifier = "/2024/06/03/BLHeli-END";
+    var disqus_url = "https://elmagnifico.tech/2024/06/03/BLHeli-END/";
+
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<!-- disqus 公共JS代码 end -->
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async('/js/anchor.min.js',function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+
+    <!-- Footer -->
+<footer data-pagefind-ignore>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">
+                    
+                    <li>
+                        <a href="/feed.xml">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                    
+                    
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/elmagnificogi">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                    
+                    <li>
+                        <a target="_blank" href="tencent://message/?uin=363562671&Site=&Menu=no">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-qq fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://t.me/elmagnificote">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-telegram fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://steamcommunity.com/id/elmagnificost">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-steam fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+                <p class="copyright text-muted">
+                    <span id="busuanzi_container_site_pv">本站总访问量<span id="fix_site_pv"></span>次<span id="busuanzi_value_site_pv" style="display: none;"></span></span>
+                    <span id="busuanzi_container_site_uv">访客数<span id="fix_site_uv"></span>人<span id="busuanzi_value_site_uv" style="display: none;"></span></span>
+                    <br>
+                    <span id="timeDate">载入天数...</span><span id="times">载入时分秒...</span>
+                    <br>
+                    Copyright &copy; Elmagnifico's Blog 2026
+                    <br>
+                    Theme by <a href="https://github.com/elmagnificogi/elmagnificogi.github.io">elmagnifico</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- back-to-top -->
+<div id="back-top">
+    <a href="#section" data-toggle="tooltip" data-placement="top" title="top">
+    <i class="fa fa-chevron-up" aria-hidden="true"></i>
+    </a>
+</div>
+
+<!-- jQuery -->
+<script src="/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<!-- Currently, only navbar scroll-down effect at desktop still depends on this -->
+<script src="/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/js/blog.min.js "></script>
+
+<!-- Service Worker -->
+
+<script src="/js/snackbar.js "></script>
+<script src="/js/sw-registration.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!-- jquery.tagcloud.js -->
+<script>
+    // only load tagcloud.js in tag.html
+    if($('#tag_cloud').length !== 0){
+        async('/js/jquery.tagcloud.js',function(){
+            $.fn.tagcloud.defaults = {
+                //size: {start: 1, end: 1, unit: 'em'},
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+<!-- fastClick.js -->
+<script>
+    async('/js/fastclick.min_4.js', function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0KN6WQKYCB"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-0KN6WQKYCB');
+</script>
+
+
+
+
+<!-- 不蒜子统计 -->
+<script defer src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+<!-- 运行时间统计 -->
+<script>
+    var now = new Date();
+    var getStatistics = false;
+    var changeDone = false;
+    function createtime() {
+        var grt= new Date("11/01/2015 20:01:26");
+        now.setTime(now.getTime()+250);
+        days = (now - grt ) / 1000 / 60 / 60 / 24; dnum = Math.floor(days);
+        hours = (now - grt ) / 1000 / 60 / 60 - (24 * dnum); hnum = Math.floor(hours);
+        if(String(hnum).length ==1 ){hnum = "0" + hnum;} minutes = (now - grt ) / 1000 /60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes); if(String(mnum).length ==1 ){mnum = "0" + mnum;}
+        seconds = (now - grt ) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds); if(String(snum).length ==1 ){snum = "0" + snum;}
+        document.getElementById("timeDate").innerHTML = "本站已运行 "+dnum+" 天 ";
+        document.getElementById("times").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+        // 补充统计
+        if(!getStatistics && ""!=document.getElementById("busuanzi_value_site_uv").innerHTML){getStatistics = true;}
+        if(getStatistics && !changeDone) {
+            site_pv = document.getElementById("busuanzi_value_site_pv").innerHTML;
+            site_uv = document.getElementById("busuanzi_value_site_uv").innerHTML;
+            site_pv_num = parseInt(site_pv,10) + 572573;
+            site_uv_num = parseInt(site_uv,10) + 490731;
+            document.getElementById("fix_site_pv").innerHTML = site_pv_num;
+            document.getElementById("fix_site_uv").innerHTML = site_uv_num;
+            changeDone = true;
+        }
+    }
+    createtime();
+     
+    setInterval("createtime()",1000);
+    
+</script>
+
+<!-- back-top -->
+<script type="module">
+    $('#back-top').hide();
+    $(document).ready(function () {
+    $(window).scroll(function () {
+    if ($(this).scrollTop() > 250) {
+      $('#back-top').fadeIn();
+    } else {
+      $('#back-top').fadeOut();
+    }
+    });
+    $('#back-top a').click(function () {
+    $('body,html').animate({
+      scrollTop: 0
+    }, 800);
+    return false;
+    });
+  });
+  </script>
+
+
+
+
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog (selector) {
+        // init
+        var P = $('div.post-container'), a, n, t, l, i, c;
+
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        // clean
+        $(selector).html('')
+
+        // appending
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#"+$(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="'+i+'" rel="nofollow">'+t+'</a>');
+            l = $('<li class="'+n+'_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function(e){
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     */
+    async("/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+<pagefind-config bundle-path="/pagefind/" meta-cache-tag="1788333363"></pagefind-config>
+<script src="/pagefind/pagefind-component-ui.js" type="module"></script>
+<script src="/js/search-cjk-fallback.js" defer></script>
+<pagefind-modal reset-on-close="true"></pagefind-modal>
+<script>
+(function () {
+  var link = document.getElementById('blog-nav-search');
+  if (!link) return;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    var modal = document.querySelector('pagefind-modal');
+    if (modal && typeof modal.open === 'function') {
+      modal.open();
+      return;
+    }
+    console.warn('[search] Pagefind 未加载，请先执行 npm run build:search 或在服务器跑 deploy.sh');
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      link.click();
+    }
+  });
+})();
+</script>
+
+
+
+</body>
+
+</html>

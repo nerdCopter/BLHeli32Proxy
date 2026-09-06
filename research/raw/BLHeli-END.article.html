@@ -1,0 +1,1126 @@
+
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container" data-pagefind-body>
+
+				<h2 id="foreword">Foreword</h2>
+
+<p>前段时间刚参加完无人机展会，各种为战争服务的无人机，百花齐放，热闹程度远超前几年，没想到刚转头，无人机行业就又被打击了</p>
+
+<h2 id="blheli被制裁">BLHeli被制裁</h2>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406040959986.png" alt="image-20240604095924947" /></p>
+
+<p>简单说由于BLHeli广泛被无人机使用，搭载BLH的ESC并不能确定最终用途，所以整个BLH数据被禁止出口，包括BLH自身收款的银行都受到了影响，所以BLH停止开发和维护了。</p>
+
+<ul>
+  <li>实际上BLH是先停止，然后才发出来相关公告</li>
+</ul>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080140878.png" alt="image-20240608014007781" /></p>
+
+<p>BLH大概在无人机市场里占90%，一个无人机就至少要搭载4个BLH电调，全世界大部分电调厂商都在国内，每年出货量大概几百上千万，BLH认可度之高，远超想象。</p>
+
+<p>最初BLH大概是在2013年上线的，一上线就开源，其优异的性能和相对低廉的价格，一下就爆火了。而BLH初代还是8bit的单片机，成本低，性能也相对弱一些，随着时代的发展，16bit单片机本身发展不太好，被跳过去了，直接进入了32bit时代，BLH在初期估计是给各个制造商做技术支持，只是挣了点小钱。从2017年开始BLH进入32位时代，开始闭源，对应的所有new features都加在了32位上，8位停止维护。</p>
+
+<p>8位电调依然可以使用，而且很多低性能领域都可以用，每年依然有不小的出货量。对应的32位电调，BLH开始针对各个制造商，对激活BLH固件的电调开始收费，大概在1RMB左右。</p>
+
+<p>BLH就算什么都不开发，每年估计也能躺赚几百万，而市面上的竞争对手，抱歉，基本没有，8位的强有力的竞争对手大概20年才有（JESC BlueJay），32位的21年才有（AM32），闭源的选手有很多（SimonK，Kiss等），不过都不怎么火，而且他们的电调往往和自己的飞控要一起使用才能得到比较好的效果。</p>
+
+<p>社区反应比我想象的要慢一点</p>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/743</p>
+</blockquote>
+
+<p><strong>由于服务器关闭了，很多人刚买的电调可能是有问题的版本，无法正常升级了</strong></p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080150415.png" alt="image-20240608015029387" />、</p>
+
+<p>作者表示他们还在获取许可中</p>
+
+<h3 id="破局">破局</h3>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406080146966.png" alt="image-20240608014614914" /></p>
+
+<p>BLH的认证模式是购买对应数量的Licenses，每激活一个电调会消耗一个，制造商都是前期一次性买n个，一次性支付n*m美刀，而此次停止维护，是直接在制造商还未使用完Licenses的情况下，就停止了服务，有的制造商手上可能还有几十万次激活未被消耗。</p>
+
+<p>与正式激活相对的，BLH也有测试版本，测试版本是只有100次上电工作的限制，使用完以后就无法使用了。想都不用想这种测试版，必然是在FLASH中写入了一个使用次数，而这个次数大概率是很容易逆向的。BLH主要是在BOOT阶段进行的校验和限制，所以要突破这一层，在这里做点手脚应该就行了，主要是针对固件的HACK（据说后来的测试版没有联网和次数限制，似乎可以长期使用）</p>
+
+<p>BLH本身的上位机是Delphi写的，也没有做什么非常严格的加密或者保护，上位机这里也有突破口。</p>
+
+<p>激活需要服务器，粗看了一下BLH用了https，所以这里要从接口上破解，需要先把https的接口给他逆向了，让他可以使用非https进行传输，然后直接抓包看接口请求是什么就行了。唯一的问题BLH的服务停了，不知道具体返回什么内容，需要结合上位机一起看回包内容。</p>
+
+<p>这样劫持https就能做出来一个无感的上位替代版本</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202406032150528.png" alt="image-20240603215033492" /></p>
+
+<p>国内制造商飞盈佳乐，直接打出一记，让我来开发，如果BLH作者敢头铁，直接把32位代码开源，那估计他人马上就没了</p>
+
+<h2 id="替代者">替代者</h2>
+
+<p>BLH32不开源，同时由于电调本身代码是汇编写的，基本就劝退了大部分人了，就算他开源了，也很少有人能修改，更别说适配其他MCU什么的了。</p>
+
+<p>这次BLH停止维护，那么对应的开源社区的电调将迎来新生，比较有名的就是AM32和BlueJay</p>
+
+<p>同样的AM32和BlueJay相对应用还是太少了，很多人对于他们的稳定性还是怀疑的，毕竟这是电调，出了一点问题就是坠机，BLH长达十一年的统治地位靠的就是稳定</p>
+
+<h3 id="上位替代am32">上位替代：AM32</h3>
+
+<blockquote>
+  <p>https://github.com/am32-firmware/AM32</p>
+</blockquote>
+
+<p>AM32相对还是比较小众的，支持的MCU比较少，但是有一部分电调是和BLH完全兼容的，但是当下阶段如果切换到AM32，那就再也不能切换回BLH了，你没有激活权限了</p>
+
+<h3 id="下位替代bluejay">下位替代：BlueJay</h3>
+
+<blockquote>
+  <p>https://github.com/mathiasvr/bluejay</p>
+</blockquote>
+
+<p>蓝鸟电调，他继承了BLH的8位电调，发扬光大，大部分32位电调的new features都移植过来了</p>
+
+<p>不过比起来，依然在某些性能上是不如BLH的</p>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/744</p>
+</blockquote>
+
+<h2 id="summary">Summary</h2>
+
+<p>归根到底和俄乌战争脱不了干系，相信过不了几天老毛子就把他破了，更别说我看到这个消息发出来的人就叫<code class="language-plaintext highlighter-rouge">just hack it</code></p>
+
+<p>对于开源的AM32和BlueJay，如果形式愈演愈烈，可能他们也会被迫删库</p>
+
+<p>制裁无人机没水平，直接制裁电调，这就让当前市场上给俄乌供货的制造商瞬间吃瘪，更别提其他正常使用的电调，DIY玩家用的电调，目前都被卡了不少货，这个事情已经发生一周了，今天才刚被曝出来，不知道国内其他几家做电调业务的现在打算怎么办。</p>
+
+<h2 id="quote">Quote</h2>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/743</p>
+
+  <p>https://www.youtube.com/watch?v=GU0RoH_Pof0</p>
+
+  <p>https://www.youtube.com/watch?v=_PNuWXgYV74</p>
+
+  <p>https://www.youtube.com/watch?v=AuBHXlWeUVc&amp;ab_channel=JustHackIt</p>
+
+  <p>https://www.facebook.com/share/p/tDjAETkfQXyj4kF4/</p>
+
+  <p>https://oscarliang.com/am32-esc-firmware-an-open-source-alternative-to-blheli32/</p>
+</blockquote>
+
+
+                <hr style="visibility: hidden;">
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2024/05/30/Glyphica/" data-toggle="tooltip" data-placement="top" title="Glyphica: Typing Survival 短评">
+                        Previous<br>
+                        <span>Glyphica: Typing Survival 短评</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2024/06/09/AbioticFactor/" data-toggle="tooltip" data-placement="top" title="Abiotic Factor开服指南">
+                        Next<br>
+                        <span>Abiotic Factor开服指南</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- disqus 评论框 start -->
+                <div class="comment">
+                    <div id="disqus_thread" class="disqus-thread"></div>
+                </div>
+                <!-- disqus 评论框 end -->
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#RaspberryPi" title="RaspberryPi" rel="9">
+                                    RaspberryPi
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#嵌入式" title="嵌入式" rel="30">
+                                    嵌入式
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Git" title="Git" rel="7">
+                                    Git
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#脚本" title="脚本" rel="2">
+                                    脚本
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#python" title="python" rel="19">
+                                    python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#LeetCode" title="LeetCode" rel="30">
+                                    LeetCode
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#C++" title="C++" rel="10">
+                                    C++
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#APM" title="APM" rel="2">
+                                    APM
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#FreeRTOS" title="FreeRTOS" rel="26">
+                                    FreeRTOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Markdown" title="Markdown" rel="5">
+                                    Markdown
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Embedded" title="Embedded" rel="30">
+                                    Embedded
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#SD" title="SD" rel="2">
+                                    SD
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Linux" title="Linux" rel="2">
+                                    Linux
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Vim" title="Vim" rel="2">
+                                    Vim
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Ubuntu" title="Ubuntu" rel="2">
+                                    Ubuntu
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tools" title="Tools" rel="8">
+                                    Tools
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#STM32" title="STM32" rel="17">
+                                    STM32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Maya" title="Maya" rel="22">
+                                    Maya
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LPWAN" title="LPWAN" rel="3">
+                                    LPWAN
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Graph Theory" title="Graph Theory" rel="3">
+                                    Graph Theory
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Algorithm" title="Algorithm" rel="4">
+                                    Algorithm
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#PathFind" title="PathFind" rel="14">
+                                    PathFind
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OMPL" title="OMPL" rel="7">
+                                    OMPL
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#VPS" title="VPS" rel="33">
+                                    VPS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QT" title="QT" rel="3">
+                                    QT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Router" title="Router" rel="2">
+                                    Router
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JS" title="JS" rel="2">
+                                    JS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Chrome" title="Chrome" rel="2">
+                                    Chrome
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tampermonkey" title="Tampermonkey" rel="2">
+                                    Tampermonkey
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#API" title="API" rel="3">
+                                    API
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Java" title="Java" rel="6">
+                                    Java
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Spring" title="Spring" rel="2">
+                                    Spring
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#MySql" title="MySql" rel="2">
+                                    MySql
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Springboot" title="Springboot" rel="8">
+                                    Springboot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Docker" title="Docker" rel="3">
+                                    Docker
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#V2ray" title="V2ray" rel="5">
+                                    V2ray
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#TTRSS" title="TTRSS" rel="2">
+                                    TTRSS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Nintendo Switch" title="Nintendo Switch" rel="12">
+                                    Nintendo Switch
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Trace" title="Trace" rel="3">
+                                    Trace
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Crack" title="Crack" rel="11">
+                                    Crack
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#BLHeli" title="BLHeli" rel="10">
+                                    BLHeli
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#DSHOT" title="DSHOT" rel="2">
+                                    DSHOT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ESC" title="ESC" rel="2">
+                                    ESC
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Music" title="Music" rel="5">
+                                    Music
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C#" title="C#" rel="5">
+                                    C#
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#EasyCon" title="EasyCon" rel="8">
+                                    EasyCon
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blog" title="Blog" rel="6">
+                                    Blog
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#杂谈" title="杂谈" rel="6">
+                                    杂谈
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Proxy" title="Proxy" rel="4">
+                                    Proxy
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#UAV" title="UAV" rel="3">
+                                    UAV
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#GuinnessWorldRecords" title="GuinnessWorldRecords" rel="3">
+                                    GuinnessWorldRecords
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NAS" title="NAS" rel="3">
+                                    NAS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#群晖" title="群晖" rel="3">
+                                    群晖
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ZeroTier" title="ZeroTier" rel="3">
+                                    ZeroTier
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Typora" title="Typora" rel="3">
+                                    Typora
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Map" title="Map" rel="2">
+                                    Map
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#旅游" title="旅游" rel="15">
+                                    旅游
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Log" title="Log" rel="2">
+                                    Log
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JSON" title="JSON" rel="2">
+                                    JSON
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Cython" title="Cython" rel="2">
+                                    Cython
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Equip" title="Equip" rel="16">
+                                    Equip
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Goods" title="Goods" rel="8">
+                                    Goods
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Share" title="Share" rel="5">
+                                    Share
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DMX512" title="DMX512" rel="2">
+                                    DMX512
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blender" title="Blender" rel="3">
+                                    Blender
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Game" title="Game" rel="32">
+                                    Game
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#AP" title="AP" rel="3">
+                                    AP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Network" title="Network" rel="10">
+                                    Network
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#CloudFlare" title="CloudFlare" rel="2">
+                                    CloudFlare
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DIY" title="DIY" rel="5">
+                                    DIY
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#WIFI" title="WIFI" rel="2">
+                                    WIFI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Camera" title="Camera" rel="2">
+                                    Camera
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Life" title="Life" rel="2">
+                                    Life
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Diablo" title="Diablo" rel="10">
+                                    Diablo
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Sensor" title="Sensor" rel="2">
+                                    Sensor
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SES" title="SES" rel="6">
+                                    SES
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QQ" title="QQ" rel="3">
+                                    QQ
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Bot" title="Bot" rel="3">
+                                    Bot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Python" title="Python" rel="7">
+                                    Python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Vmq" title="Vmq" rel="2">
+                                    Vmq
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Jenkins" title="Jenkins" rel="4">
+                                    Jenkins
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#米家" title="米家" rel="8">
+                                    米家
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ESP32" title="ESP32" rel="6">
+                                    ESP32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Software" title="Software" rel="5">
+                                    Software
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C" title="C" rel="4">
+                                    C
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MT793x" title="MT793x" rel="5">
+                                    MT793x
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NXP" title="NXP" rel="4">
+                                    NXP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CH32" title="CH32" rel="2">
+                                    CH32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OpenWrt" title="OpenWrt" rel="4">
+                                    OpenWrt
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Onion" title="Onion" rel="2">
+                                    Onion
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Copilot" title="Copilot" rel="2">
+                                    Copilot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Cursor" title="Cursor" rel="6">
+                                    Cursor
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Investment" title="Investment" rel="2">
+                                    Investment
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ChatGPT" title="ChatGPT" rel="4">
+                                    ChatGPT
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SFX" title="SFX" rel="2">
+                                    SFX
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Debug" title="Debug" rel="2">
+                                    Debug
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#RouterOS" title="RouterOS" rel="5">
+                                    RouterOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Mikrotik" title="Mikrotik" rel="5">
+                                    Mikrotik
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#GitLab" title="GitLab" rel="2">
+                                    GitLab
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Drone" title="Drone" rel="2">
+                                    Drone
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#OpenAI" title="OpenAI" rel="4">
+                                    OpenAI
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#VS Code" title="VS Code" rel="4">
+                                    VS Code
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#管理" title="管理" rel="6">
+                                    管理
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#build" title="build" rel="6">
+                                    build
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Kconfig" title="Kconfig" rel="5">
+                                    Kconfig
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CMake" title="CMake" rel="6">
+                                    CMake
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Su7 Ultra" title="Su7 Ultra" rel="14">
+                                    Su7 Ultra
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Car" title="Car" rel="14">
+                                    Car
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#AI" title="AI" rel="19">
+                                    AI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MCP" title="MCP" rel="3">
+                                    MCP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LLM" title="LLM" rel="2">
+                                    LLM
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Art" title="Art" rel="3">
+                                    Art
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#审美" title="审美" rel="3">
+                                    审美
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Skills" title="Skills" rel="2">
+                                    Skills
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Agent" title="Agent" rel="7">
+                                    Agent
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="https://blog.l0v0.com/">智伤帝</a></li>
+                    
+                        <li><a href="http://smilejing.cn/">小静的博客</a></li>
+                    
+                        <li><a href="https://blog.whuzfb.cn/">晨曦的博客</a></li>
+                    
+                        <li><a href="https://hiripple.com/">hiRipple</a></li>
+                    
+                        <li><a href="https://www.gaicas.com/">草东日记</a></li>
+                    
+                        <li><a href="https://molunerfinn.com/">MARKSZのBlog</a></li>
+                    
+                        <li><a href="http://等你成为我的朋友">等你成为我的朋友</a></li>
+                    
+                        <li><a href="http://Wait for you">Wait for you</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>

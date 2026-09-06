@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blheli32proxy"
+version = "0.1.0"
+description = "Cross-platform BLHeli32 ESC flashing tool with a self-hosted flash-approval server"
+requires-python = ">=3.9"
+readme = "README.md"
+dependencies = [
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+hid = ["hid>=1.0.5"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+blheli32proxy = "blheli32proxy.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

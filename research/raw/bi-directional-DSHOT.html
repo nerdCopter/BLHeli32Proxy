@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="ocEyzgQixcMwLGcR5yegd7v1cTQsH0TV3h4JLlokIIs" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="全栈、后端、嵌入式、maya与游戏 | elmagnifico， Full Stack Engineer & Back-end Engineer & Embedded System Lover | 这里是elmagnifico的个人博客，君子之交淡如水。">
+    <meta name="keywords" content="elmagnifico,全栈,后端,嵌入式,maya,游戏,C,C++,Python,C#,JAVA,树莓派,路径规划,无人机,集群,vps,blog,springboot,STM32,nintendo switch,硬件,game,DIY">
+    <meta name="theme-color" content="#000000">
+
+    <title>双向DSHOT with RPM feedback全指南 - elmagnifico's blog</title>
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://elmagnifico.tech/2023/04/07/bi-directional-DSHOT/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/blog.min.css">
+
+    <!-- Pygments Github CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+
+    
+
+    <!-- top processbar -->
+    <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="/css/style.css" rel="stylesheet"></noscript>
+
+    <link href="/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+    
+    <link rel="stylesheet" href="/css/search-pagefind.css">
+    <link rel="stylesheet" href="/css/search-cjk-fallback.css">
+    <link href="/pagefind/pagefind-component-ui.css" rel="stylesheet">
+    
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.0/html5shiv.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    
+
+<!-- Navigation -->
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top" data-pagefind-ignore>
+    <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Elmagnifico's Blog</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div id="blog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    
+
+                    <li>
+                        <a href="/">Home</a>
+                    </li>
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    <li>
+                        <a href="/tags/">Tags</a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a href="/about/">About</a>
+                    </li>
+                    
+                    
+                    <li class="nav-search-item">
+                        <a href="#" class="nav-search-link" id="blog-nav-search" role="button" aria-label="搜索文章" title="搜索文章 (Ctrl+K)">
+                            <i class="fa fa-search" aria-hidden="true"></i>
+                            <span class="nav-search-text">搜索</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+    <!-- /.container -->
+</nav>
+<script>
+    // Drop Bootstarp low-performance Navbar
+    // Use customize navbar with high-quality material design animation
+    // in high-perf jank-free CSS3 implementation
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#blog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    var __HuxNav__ = {
+        close: function(){
+            $navbar.className = " ";
+            // wait until animation end.
+            setTimeout(function(){
+                // prevent frequently toggle
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        },
+        open: function(){
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+
+    // Bind Event
+    $toggle.addEventListener('click', function(e){
+        if ($navbar.className.indexOf('in') > 0) {
+            __HuxNav__.close()
+        }else{
+            __HuxNav__.open()
+        }
+    })
+
+    /**
+     * Since Fastclick is used to delegate 'touchstart' globally
+     * to hack 300ms delay in iOS by performing a fake 'click',
+     * Using 'e.stopPropagation' to stop 'touchstart' event from 
+     * $toggle/$collapse will break global delegation.
+     * 
+     * Instead, we use a 'e.target' filter to prevent handler
+     * added to document close HuxNav.  
+     *
+     * Also, we use 'click' instead of 'touchstart' as compromise
+     */
+    document.addEventListener('click', function(e){
+        if(e.target == $toggle) return;
+        if(e.target.className == 'icon-bar') return;
+        __HuxNav__.close();
+    })
+</script>
+
+
+    <!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/img/x1.jpg')
+    }
+
+    
+</style>
+<header class="intro-header" >
+    <div class="header-mask"></div>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/#DSHOT" title="DSHOT" data-pagefind-meta="tag">DSHOT</a>
+                        
+                        <a class="tag" href="/tags/#BLHeli" title="BLHeli" data-pagefind-meta="tag">BLHeli</a>
+                        
+                    </div>
+                    <h1 data-pagefind-meta="title">双向DSHOT with RPM feedback全指南</h1>
+                    
+                    
+                    <h2 class="subheading" data-pagefind-meta="subtitle">Bidirectional DSHOT，单线DSHOT</h2>
+                    
+                    <span id="busuanzi_container_page_pv">Views:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;times</span>
+                    
+                    <span class="meta">Updated on January 30, 2026</span>
+                    
+                    <span class="meta">Posted by elmagnifico on April 7, 2023</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container" data-pagefind-body>
+
+				<h2 id="foreword">Foreword</h2>
+
+<p>很久之前写过DSHOT，这次捡起来实现双向DSHOT</p>
+
+<blockquote>
+  <p>https://elmagnifico.tech/2020/06/03/Dshot-STM32-PWM-HAL/</p>
+</blockquote>
+
+<p>单线DSHOT由于单线复用，实现起来非常麻烦，要考虑的东西很多。而相关文章又非常少，只能挨个翻看git issues，搜索零星的信息组合在一起。</p>
+
+<p>某种程度上说DSHOT+BLH ESC有点类似现在的FOC驱动器，只不过是比较挫、弱化版、单向版的FOC，任何使用BLH ESC的电机都能使用的。</p>
+
+<p>当然实际的DSHOT，无法精准控制电机的转速，得到的电机转速也是有限制的，不能趋近于0</p>
+
+<p>26.1.30，建议参考一下最新的Betafly的实现，又改了很多内容，本文只建议理解协议本身</p>
+
+<h2 id="bidirectional-dshot">Bidirectional DSHOT</h2>
+
+<blockquote>
+  <p>https://github.com/betaflight/betaflight/pull/8554#issuecomment-512507625</p>
+</blockquote>
+
+<p>总结一下，这是Bidirectional DSHOT初次实现，反转了正常DSHOT协议，并且有些和标准的DSHOT实现是不一样的，其实可以认为是一个变种DSHOT，后续这种DSHOT也被BLH的最新固件支持，变成了DSHOT的基础实现。其实这个PR还有一个点也非强，他希望兼容了BLH_S，以前老的16位单片机也能用上DSHOT，也能使用转速反馈，非常牛逼了。</p>
+
+<p>Bidirectional DSHOT的一些特性</p>
+
+<ul>
+  <li>单线、双向传输</li>
+  <li>Telemetry 只有转速信息，并且传回的内容是eRPM/100以后的值</li>
+  <li>Telemetry 返回的数据是GCR格式的，且起始位必然是拉低的</li>
+  <li>校验位计算最后需要翻转4位BIT</li>
+  <li>Bidirectional  DSHOT的最终数据输出电平是和普通DSHOT相反的</li>
+  <li>DSHOT 600 及以上不太支持，实现困难，TIM采样困难</li>
+  <li>32位 BLH 需要32.7版本以后的</li>
+  <li>8或者16位 BLH_S 需要使用Bluejay版本的固件</li>
+  <li>ESC上电以后需要稳定输出一会才能正确回复Telemetry，否则可能单次请求Telemetry不会回复</li>
+  <li><strong>一旦发送的是Bidirectional DSHOT帧，那么必然会回复Telemetry，无论是否开启Telemetry</strong></li>
+</ul>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202403081524883.png" alt="image-20240308152416808" /></p>
+
+<p>注意，由于Bidirectional DSHOT的帧是需要反转的，所以0，1的表示在这里反过来了</p>
+
+<p><strong>根据BLH最新的测试版说明，32.92.2版本扩展了Bidirectional DSHOT的Telemetry信息，包含温度、电压、电流信息了，不再是单独的转速了。</strong></p>
+
+<h4 id="死区">死区</h4>
+
+<p>显然，用单线做收发，不可避免地要遇到死区的问题，PWM的死区比普通GPIO好一点，是相对优化过的，但是普通GPIO，从输出转换到输入，需要一定时间，并且连接的器件也要同时切换，否则有可能出现小短路的情况。</p>
+
+<h4 id="名词解释">名词解释</h4>
+
+<ul>
+  <li>GCR，一种编码方式，他扩大了传输的数据量并且提高了传输速率，但是更方便硬件去做检测和识别了</li>
+  <li>bit bang/bit-bang 其实就是GPIO模拟DSHOT，比如软I2C，软SPI，这种用普通GPIO模拟某种协议的方式，就叫bit-bang</li>
+  <li>3x，一般来说如果你想解码一个信号，要求你获取信号的频率是原始信号的x倍，你才能得到一个比较好的解码效果，这里默认使用3倍采样</li>
+  <li>5/4，GCR编码后使得原来的4bits变成了5bits，所以传输速度就提升了</li>
+  <li>bidir DSHOT，双向DSHOT，也就是单线DSHOT，实现转速可读</li>
+  <li>Run-length limited，其实就是在带宽有限的通信链路上，如何组织数据，从而提高数据传输速度</li>
+  <li>eRPM，电调回传的是磁极数的间隔时间，电机上磁极一定是成对出现的，一般电机是14或者12个</li>
+  <li>RPM，转速每分钟</li>
+  <li>RPS，转速每秒</li>
+</ul>
+
+<h4 id="实现方式">实现方式</h4>
+
+<p>一般来说DSHOT都是通过PWM+DMA实现的，但是众所周知H7以下的STM32板子DMA通道都是固定的，如果一开始设计的时候没有考虑到这个事情，就很有可能会出现DMA冲突，PWM+DMA实现不了，进而导致DSHOT无法使用，也就没法推进了。</p>
+
+<p>看了一下老的issues，发现他们提出来了一种解决办法，通过TIM+普通GPIO+DMA实现DSHOT，这相当于是说就算PWM用不了，他也能直接做GPIO去实现，或者直接利用空闲的GPIO实现DSHOT，而不需要被DMA或者PWM通道绑定给卡住。</p>
+
+<p>实际的实现是通过开启TIM的update事件作为DMA的触发器，触发去读取GPIO的IDR寄存器，进而将整个数据缓存下来，同理如果要输出也是可以使用类似的方法。多数情况下IO都会选择同组的，那么只需要一路TIM就能实现了，对于资源消耗也是相当小的，GPIO的DMA选择性就非常多了。</p>
+
+<h3 id="代码分析">代码分析</h3>
+
+<h4 id="驱动结构">驱动结构</h4>
+
+<p><code class="language-plaintext highlighter-rouge">motor.c</code>是总体电机控制的驱动</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// End point initialization is called from mixerInit before motorDevInit; can't use vtable...</span>
+<span class="kt">void</span> <span class="nf">motorInitEndpoints</span><span class="p">(</span><span class="k">const</span> <span class="n">motorConfig_t</span> <span class="o">*</span><span class="n">motorConfig</span><span class="p">,</span> <span class="kt">float</span> <span class="n">outputLimit</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">outputLow</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">outputHigh</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">disarm</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">deadbandMotor3dHigh</span><span class="p">,</span> <span class="kt">float</span> <span class="o">*</span><span class="n">deadbandMotor3dLow</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">checkMotorProtocol</span><span class="p">(</span><span class="o">&amp;</span><span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">dev</span><span class="p">);</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">isMotorProtocolEnabled</span><span class="p">())</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">isMotorProtocolDshot</span><span class="p">())</span> <span class="p">{</span>
+            <span class="n">analogInitEndpoints</span><span class="p">(</span><span class="n">motorConfig</span><span class="p">,</span> <span class="n">outputLimit</span><span class="p">,</span> <span class="n">outputLow</span><span class="p">,</span> <span class="n">outputHigh</span><span class="p">,</span> <span class="n">disarm</span><span class="p">,</span> <span class="n">deadbandMotor3dHigh</span><span class="p">,</span> <span class="n">deadbandMotor3dLow</span><span class="p">);</span>
+        <span class="p">}</span>
+<span class="cp">#ifdef USE_DSHOT
+</span>        <span class="k">else</span> <span class="p">{</span>
+            <span class="n">dshotInitEndpoints</span><span class="p">(</span><span class="n">motorConfig</span><span class="p">,</span> <span class="n">outputLimit</span><span class="p">,</span> <span class="n">outputLow</span><span class="p">,</span> <span class="n">outputHigh</span><span class="p">,</span> <span class="n">disarm</span><span class="p">,</span> <span class="n">deadbandMotor3dHigh</span><span class="p">,</span> <span class="n">deadbandMotor3dLow</span><span class="p">);</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>在这里调用了dshot endpoints的初始化，可以认为只是初始化了一下前期使用的一些变量</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">motorDevInit</span><span class="p">(</span><span class="k">const</span> <span class="n">motorDevConfig_t</span> <span class="o">*</span><span class="n">motorDevConfig</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">idlePulse</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">motorCount</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">memset</span><span class="p">(</span><span class="n">motors</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">motors</span><span class="p">));</span>
+
+    <span class="n">bool</span> <span class="n">useUnsyncedPwm</span> <span class="o">=</span> <span class="n">motorDevConfig</span><span class="o">-&gt;</span><span class="n">useUnsyncedPwm</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">isMotorProtocolEnabled</span><span class="p">())</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">isMotorProtocolDshot</span><span class="p">())</span> <span class="p">{</span>
+            <span class="n">motorDevice</span> <span class="o">=</span> <span class="n">motorPwmDevInit</span><span class="p">(</span><span class="n">motorDevConfig</span><span class="p">,</span> <span class="n">idlePulse</span><span class="p">,</span> <span class="n">motorCount</span><span class="p">,</span> <span class="n">useUnsyncedPwm</span><span class="p">);</span>
+        <span class="p">}</span>
+<span class="cp">#ifdef USE_DSHOT
+</span>        <span class="k">else</span> <span class="p">{</span>
+<span class="cp">#ifdef USE_DSHOT_BITBANG
+</span>            <span class="k">if</span> <span class="p">(</span><span class="n">isDshotBitbangActive</span><span class="p">(</span><span class="n">motorDevConfig</span><span class="p">))</span> <span class="p">{</span>
+                <span class="n">motorDevice</span> <span class="o">=</span> <span class="n">dshotBitbangDevInit</span><span class="p">(</span><span class="n">motorDevConfig</span><span class="p">,</span> <span class="n">motorCount</span><span class="p">);</span>
+            <span class="p">}</span> <span class="k">else</span>
+<span class="cp">#endif
+</span>            <span class="p">{</span>
+                <span class="n">motorDevice</span> <span class="o">=</span> <span class="n">dshotPwmDevInit</span><span class="p">(</span><span class="n">motorDevConfig</span><span class="p">,</span> <span class="n">idlePulse</span><span class="p">,</span> <span class="n">motorCount</span><span class="p">,</span> <span class="n">useUnsyncedPwm</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>    <span class="p">}</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">motorDevice</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">count</span> <span class="o">=</span> <span class="n">motorCount</span><span class="p">;</span>
+        <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">initialized</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+        <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">motorEnableTimeMs</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">enabled</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">motorNullDevice</span><span class="p">.</span><span class="n">vTable</span> <span class="o">=</span> <span class="n">motorNullVTable</span><span class="p">;</span>
+        <span class="n">motorDevice</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">motorNullDevice</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>接着就是电机设备的初始，这里就会根据实际使用的协议来初始化了。</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">motorDevice_t</span> <span class="o">*</span><span class="nf">dshotBitbangDevInit</span><span class="p">(</span><span class="k">const</span> <span class="n">motorDevConfig_t</span> <span class="o">*</span><span class="n">motorConfig</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">count</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">dbgPinLo</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="n">dbgPinLo</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+    <span class="n">motorPwmProtocol</span> <span class="o">=</span> <span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">motorPwmProtocol</span><span class="p">;</span>
+    <span class="n">bbDevice</span><span class="p">.</span><span class="n">vTable</span> <span class="o">=</span> <span class="n">bbVTable</span><span class="p">;</span>
+    <span class="n">motorCount</span> <span class="o">=</span> <span class="n">count</span><span class="p">;</span>
+    <span class="n">bbStatus</span> <span class="o">=</span> <span class="n">DSHOT_BITBANG_STATUS_OK</span><span class="p">;</span>
+
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>    <span class="n">useDshotTelemetry</span> <span class="o">=</span> <span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">useDshotTelemetry</span><span class="p">;</span>
+<span class="cp">#endif
+</span>
+    <span class="n">memset</span><span class="p">(</span><span class="n">bbOutputBuffer</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">bbOutputBuffer</span><span class="p">));</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">motorIndex</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">MAX_SUPPORTED_MOTORS</span> <span class="o">&amp;&amp;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">motorCount</span><span class="p">;</span> <span class="n">motorIndex</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">const</span> <span class="kt">unsigned</span> <span class="n">reorderedMotorIndex</span> <span class="o">=</span> <span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">motorOutputReordering</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">];</span>
+        <span class="k">const</span> <span class="n">timerHardware_t</span> <span class="o">*</span><span class="n">timerHardware</span> <span class="o">=</span> <span class="n">timerGetConfiguredByTag</span><span class="p">(</span><span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">ioTags</span><span class="p">[</span><span class="n">reorderedMotorIndex</span><span class="p">]);</span>
+        <span class="k">const</span> <span class="n">IO_t</span> <span class="n">io</span> <span class="o">=</span> <span class="n">IOGetByTag</span><span class="p">(</span><span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">ioTags</span><span class="p">[</span><span class="n">reorderedMotorIndex</span><span class="p">]);</span>
+
+        <span class="kt">uint8_t</span> <span class="n">output</span> <span class="o">=</span> <span class="n">motorConfig</span><span class="o">-&gt;</span><span class="n">motorPwmInversion</span> <span class="o">?</span>  <span class="n">timerHardware</span><span class="o">-&gt;</span><span class="n">output</span> <span class="o">^</span> <span class="n">TIMER_OUTPUT_INVERTED</span> <span class="o">:</span> <span class="n">timerHardware</span><span class="o">-&gt;</span><span class="n">output</span><span class="p">;</span>
+        <span class="n">bbPuPdMode</span> <span class="o">=</span> <span class="p">(</span><span class="n">output</span> <span class="o">&amp;</span> <span class="n">TIMER_OUTPUT_INVERTED</span><span class="p">)</span> <span class="o">?</span> <span class="n">BB_GPIO_PULLDOWN</span> <span class="o">:</span> <span class="n">BB_GPIO_PULLUP</span><span class="p">;</span>
+
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>        <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">output</span> <span class="o">^=</span> <span class="n">TIMER_OUTPUT_INVERTED</span><span class="p">;</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">IOIsFreeOrPreinit</span><span class="p">(</span><span class="n">io</span><span class="p">))</span> <span class="p">{</span>
+            <span class="cm">/* not enough motors initialised for the mixer or a break in the motors */</span>
+            <span class="n">bbDevice</span><span class="p">.</span><span class="n">vTable</span><span class="p">.</span><span class="n">write</span> <span class="o">=</span> <span class="n">motorWriteNull</span><span class="p">;</span>
+            <span class="n">bbDevice</span><span class="p">.</span><span class="n">vTable</span><span class="p">.</span><span class="n">updateStart</span> <span class="o">=</span> <span class="n">motorUpdateStartNull</span><span class="p">;</span>
+            <span class="n">bbDevice</span><span class="p">.</span><span class="n">vTable</span><span class="p">.</span><span class="n">updateComplete</span> <span class="o">=</span> <span class="n">motorUpdateCompleteNull</span><span class="p">;</span>
+            <span class="n">bbStatus</span> <span class="o">=</span> <span class="n">DSHOT_BITBANG_STATUS_MOTOR_PIN_CONFLICT</span><span class="p">;</span>
+            <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="kt">int</span> <span class="n">pinIndex</span> <span class="o">=</span> <span class="n">IO_GPIOPinIdx</span><span class="p">(</span><span class="n">io</span><span class="p">);</span>
+
+        <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">pinIndex</span> <span class="o">=</span> <span class="n">pinIndex</span><span class="p">;</span>
+        <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">io</span> <span class="o">=</span> <span class="n">io</span><span class="p">;</span>
+        <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="p">;</span>
+<span class="cp">#if defined(STM32F4)
+</span>        <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">iocfg</span> <span class="o">=</span> <span class="n">IO_CONFIG</span><span class="p">(</span><span class="n">GPIO_Mode_OUT</span><span class="p">,</span> <span class="n">GPIO_Speed_50MHz</span><span class="p">,</span> <span class="n">GPIO_OType_PP</span><span class="p">,</span> <span class="n">bbPuPdMode</span><span class="p">);</span>
+<span class="cp">#elif defined(STM32F7) || defined(STM32G4) || defined(STM32H7)
+</span>        <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">iocfg</span> <span class="o">=</span> <span class="n">IO_CONFIG</span><span class="p">(</span><span class="n">GPIO_MODE_OUTPUT_PP</span><span class="p">,</span> <span class="n">GPIO_SPEED_FREQ_LOW</span><span class="p">,</span> <span class="n">bbPuPdMode</span><span class="p">);</span>
+<span class="cp">#endif
+</span>
+        <span class="n">IOInit</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">OWNER_MOTOR</span><span class="p">,</span> <span class="n">RESOURCE_INDEX</span><span class="p">(</span><span class="n">motorIndex</span><span class="p">));</span>
+        <span class="n">IOConfigGPIO</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">iocfg</span><span class="p">);</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">output</span> <span class="o">&amp;</span> <span class="n">TIMER_OUTPUT_INVERTED</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">IOLo</span><span class="p">(</span><span class="n">io</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="n">IOHi</span><span class="p">(</span><span class="n">io</span><span class="p">);</span>
+        <span class="p">}</span>
+
+        <span class="c1">// Fill in motors structure for 4way access (XXX Should be refactored)</span>
+        <span class="n">motors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">io</span> <span class="o">=</span> <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">io</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="o">&amp;</span><span class="n">bbDevice</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>dshotBitbang设备初始化，根据实际的电机数量，依次获取对应的IO和Timer专门用于处理Bitbang，之后就是对IO进行初始化。通过代码看到实际使用的Timer就是<code class="language-plaintext highlighter-rouge">Tim1</code>和<code class="language-plaintext highlighter-rouge">Tim8</code>，他们的通道数量比较多，适合做电机使用</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">const</span> <span class="n">timerHardware_t</span> <span class="n">bbTimerHardware</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="cp">#if defined(STM32F4) || defined(STM32F7)
+#if !defined(STM32F411xE)
+</span>    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH1</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH2</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH3</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH4</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+<span class="cp">#endif
+</span>    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH1</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH1</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH2</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH3</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH4</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+
+<span class="cp">#elif defined(STM32G4) || defined(STM327H)
+</span>    <span class="c1">// XXX TODO: STM32G4 and STM32H7 can use any timer for pacing</span>
+
+    <span class="c1">// DMA request numbers are duplicated for TIM1 and TIM8:</span>
+    <span class="c1">//   - Any pacer can serve a GPIO port.</span>
+    <span class="c1">//   - For quads (or less), 4 pacers can cover the worst case scenario of</span>
+    <span class="c1">//     4 motors scattered across 4 different GPIO ports.</span>
+    <span class="c1">//   - For hexas (and larger), more channels may become necessary,</span>
+    <span class="c1">//     in which case the DMA request numbers should be modified.</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH1</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH2</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH3</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM8</span><span class="p">,</span>  <span class="n">CH4</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH1</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH2</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH3</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">DEF_TIM</span><span class="p">(</span><span class="n">TIM1</span><span class="p">,</span>  <span class="n">CH4</span><span class="p">,</span> <span class="n">NONE</span><span class="p">,</span>  <span class="n">TIM_USE_NONE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+
+</code></pre></div></div>
+
+<p>后续的motor所有操作就是基于VTable来的了</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="n">motorVTable_t</span> <span class="n">bbVTable</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="p">.</span><span class="n">postInit</span> <span class="o">=</span> <span class="n">bbPostInit</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">enable</span> <span class="o">=</span> <span class="n">bbEnableMotors</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">disable</span> <span class="o">=</span> <span class="n">bbDisableMotors</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">isMotorEnabled</span> <span class="o">=</span> <span class="n">bbIsMotorEnabled</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">updateStart</span> <span class="o">=</span> <span class="n">bbUpdateStart</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">write</span> <span class="o">=</span> <span class="n">bbWrite</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">writeInt</span> <span class="o">=</span> <span class="n">bbWriteInt</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">updateComplete</span> <span class="o">=</span> <span class="n">bbUpdateComplete</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">convertExternalToMotor</span> <span class="o">=</span> <span class="n">dshotConvertFromExternal</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">convertMotorToExternal</span> <span class="o">=</span> <span class="n">dshotConvertToExternal</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">shutdown</span> <span class="o">=</span> <span class="n">bbShutdown</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>唯一需要注意的地方就是，dshot需要先updateStart，再写值，然后再complete</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">motorWriteAll</span><span class="p">(</span><span class="kt">float</span> <span class="o">*</span><span class="n">values</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="cp">#ifdef USE_PWM_OUTPUT
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">enabled</span><span class="p">)</span> <span class="p">{</span>
+<span class="cp">#if defined(USE_DSHOT) &amp;&amp; defined(USE_DSHOT_TELEMETRY)
+</span>        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">vTable</span><span class="p">.</span><span class="n">updateStart</span><span class="p">())</span> <span class="p">{</span>
+            <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>        <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">count</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">vTable</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+        <span class="p">}</span>
+        <span class="n">motorDevice</span><span class="o">-&gt;</span><span class="n">vTable</span><span class="p">.</span><span class="n">updateComplete</span><span class="p">();</span>
+    <span class="p">}</span>
+<span class="cp">#else
+</span>    <span class="n">UNUSED</span><span class="p">(</span><span class="n">values</span><span class="p">);</span>
+<span class="cp">#endif
+</span><span class="p">}</span>
+</code></pre></div></div>
+
+<p>如何开启一次传输</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="n">bool</span> <span class="nf">bbUpdateStart</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY_STATS
+</span>        <span class="k">const</span> <span class="n">timeMs_t</span> <span class="n">currentTimeMs</span> <span class="o">=</span> <span class="n">millis</span><span class="p">();</span>
+<span class="cp">#endif
+</span>
+        <span class="c1">// 首先是等待上一次telemetry的完成</span>
+        <span class="c1">// Wait for telemetry reception to complete before decode</span>
+        <span class="n">bool</span> <span class="n">telemetryPending</span><span class="p">;</span>
+        <span class="n">bool</span> <span class="n">telemetryWait</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+        <span class="k">const</span> <span class="n">timeUs_t</span> <span class="n">startTimeUs</span> <span class="o">=</span> <span class="n">micros</span><span class="p">();</span>
+
+        <span class="k">do</span> <span class="p">{</span>
+            <span class="n">telemetryPending</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+            <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">usedMotorPorts</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">telemetryPending</span> <span class="o">|=</span> <span class="n">bbPorts</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">telemetryPending</span><span class="p">;</span>
+            <span class="p">}</span>
+
+            <span class="n">telemetryWait</span> <span class="o">|=</span> <span class="n">telemetryPending</span><span class="p">;</span>
+			<span class="c1">// 如果超时了，就直接退出了，本次写失败</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">cmpTimeUs</span><span class="p">(</span><span class="n">micros</span><span class="p">(),</span> <span class="n">startTimeUs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">DSHOT_TELEMETRY_TIMEOUT</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="n">telemetryPending</span><span class="p">);</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">telemetryWait</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">DEBUG_SET</span><span class="p">(</span><span class="n">DEBUG_DSHOT_TELEMETRY_COUNTS</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">debug</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">motorIndex</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">MAX_SUPPORTED_MOTORS</span> <span class="o">&amp;&amp;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">motorCount</span><span class="p">;</span> <span class="n">motorIndex</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="cp">#ifdef USE_DSHOT_CACHE_MGMT
+</span>                <span class="c1">// 这里是处理ST的cache问题，将DMA缓存区域无效化，防止后续数据出问题</span>
+                <span class="c1">// Only invalidate the buffer once. If all motors are on a common port they'll share a buffer.</span>
+                <span class="n">bool</span> <span class="n">invalidated</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+                <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">motorIndex</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputBuffer</span> <span class="o">==</span> <span class="n">bbMotors</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputBuffer</span><span class="p">)</span> <span class="p">{</span>
+                        <span class="n">invalidated</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+                <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">invalidated</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">SCB_InvalidateDCache_by_Addr</span><span class="p">((</span><span class="kt">uint32_t</span> <span class="o">*</span><span class="p">)</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputBuffer</span><span class="p">,</span>
+                                                 <span class="n">DSHOT_BB_PORT_IP_BUF_CACHE_ALIGN_BYTES</span><span class="p">);</span>
+                <span class="p">}</span>
+<span class="cp">#endif
+</span>
+<span class="cp">#ifdef STM32F4
+</span>                <span class="kt">uint32_t</span> <span class="n">rawValue</span> <span class="o">=</span> <span class="n">decode_bb_bitband</span><span class="p">(</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputBuffer</span><span class="p">,</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputCount</span> <span class="o">-</span> <span class="n">bbDMA_Count</span><span class="p">(</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="p">),</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">pinIndex</span><span class="p">);</span>
+<span class="cp">#else
+</span>                <span class="c1">// 解析上一次的值</span>
+                <span class="kt">uint32_t</span> <span class="n">rawValue</span> <span class="o">=</span> <span class="n">decode_bb</span><span class="p">(</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputBuffer</span><span class="p">,</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portInputCount</span> <span class="o">-</span> <span class="n">bbDMA_Count</span><span class="p">(</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="p">),</span>
+                    <span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">pinIndex</span><span class="p">);</span>
+<span class="cp">#endif
+</span>                <span class="k">if</span> <span class="p">(</span><span class="n">rawValue</span> <span class="o">==</span> <span class="n">DSHOT_TELEMETRY_NOEDGE</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">DEBUG_SET</span><span class="p">(</span><span class="n">DEBUG_DSHOT_TELEMETRY_COUNTS</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">debug</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+                    <span class="k">continue</span><span class="p">;</span>
+                <span class="p">}</span>
+                <span class="n">DEBUG_SET</span><span class="p">(</span><span class="n">DEBUG_DSHOT_TELEMETRY_COUNTS</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">debug</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+                <span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">readCount</span><span class="o">++</span><span class="p">;</span>
+				
+                <span class="c1">// 简单判断是否正确，更新Telmetry状态</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">rawValue</span> <span class="o">!=</span> <span class="n">DSHOT_TELEMETRY_INVALID</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="c1">// Check EDT enable or store raw value</span>
+                    <span class="k">if</span> <span class="p">((</span><span class="n">rawValue</span> <span class="o">==</span> <span class="mh">0x0E00</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">dshotCommandGetCurrent</span><span class="p">(</span><span class="n">motorIndex</span><span class="p">)</span> <span class="o">==</span> <span class="n">DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE</span><span class="p">))</span> <span class="p">{</span>
+                        <span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">motorState</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">telemetryTypes</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">DSHOT_TELEMETRY_TYPE_STATE_EVENTS</span><span class="p">;</span>
+                    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                        <span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">motorState</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">rawValue</span> <span class="o">=</span> <span class="n">rawValue</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">invalidPacketCount</span><span class="o">++</span><span class="p">;</span>
+                <span class="p">}</span>
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY_STATS
+</span>                <span class="n">updateDshotTelemetryQuality</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dshotTelemetryQuality</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">],</span> <span class="n">rawValue</span> <span class="o">!=</span> <span class="n">DSHOT_TELEMETRY_INVALID</span><span class="p">,</span> <span class="n">currentTimeMs</span><span class="p">);</span>
+<span class="cp">#endif
+</span>            <span class="p">}</span>
+
+            <span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">rawValueState</span> <span class="o">=</span> <span class="n">DSHOT_RAW_VALUE_STATE_NOT_PROCESSED</span><span class="p">;</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">usedMotorPorts</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">bbDMA_Cmd</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bbPorts</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">DISABLE</span><span class="p">);</span>
+        <span class="n">bbOutputDataClear</span><span class="p">(</span><span class="n">bbPorts</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">portOutputBuffer</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>基本可以看到start仅仅是对上一次telemetry的处理，开启一次新的DSHOT传输还不在这里。</p>
+
+<p>实际执行DSHOT写入的地方是在<code class="language-plaintext highlighter-rouge">bbWriteInt</code></p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">void</span> <span class="nf">bbWriteInt</span><span class="p">(</span><span class="kt">uint8_t</span> <span class="n">motorIndex</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">value</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">bbMotor_t</span> <span class="o">*</span><span class="k">const</span> <span class="n">bbmotor</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">];</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">configured</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// fetch requestTelemetry from motors. Needs to be refactored.</span>
+    <span class="n">motorDmaOutput_t</span> <span class="o">*</span> <span class="k">const</span> <span class="n">motor</span> <span class="o">=</span> <span class="n">getMotorDmaOutput</span><span class="p">(</span><span class="n">motorIndex</span><span class="p">);</span>
+    <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">.</span><span class="n">requestTelemetry</span> <span class="o">=</span> <span class="n">motor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">.</span><span class="n">requestTelemetry</span><span class="p">;</span>
+    <span class="n">motor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">.</span><span class="n">requestTelemetry</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+
+    <span class="c1">// If there is a command ready to go overwrite the value and send that instead</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">dshotCommandIsProcessing</span><span class="p">())</span> <span class="p">{</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">dshotCommandGetCurrent</span><span class="p">(</span><span class="n">motorIndex</span><span class="p">);</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">.</span><span class="n">requestTelemetry</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="p">;</span>
+	<span class="c1">// 准备数据</span>
+    <span class="kt">uint16_t</span> <span class="n">packet</span> <span class="o">=</span> <span class="n">prepareDshotPacket</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">protocolControl</span><span class="p">);</span>
+
+    <span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span> <span class="o">=</span> <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">bbPort</span><span class="p">;</span>
+
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">bbOutputDataSet</span><span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portOutputBuffer</span><span class="p">,</span> <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">pinIndex</span><span class="p">,</span> <span class="n">packet</span><span class="p">,</span> <span class="n">DSHOT_BITBANG_INVERTED</span><span class="p">);</span>
+    <span class="p">}</span> <span class="k">else</span>
+<span class="cp">#endif
+</span>    <span class="p">{</span>
+        <span class="n">bbOutputDataSet</span><span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portOutputBuffer</span><span class="p">,</span> <span class="n">bbmotor</span><span class="o">-&gt;</span><span class="n">pinIndex</span><span class="p">,</span> <span class="n">packet</span><span class="p">,</span> <span class="n">DSHOT_BITBANG_NONINVERTED</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>到这里也只是准备好了DSHOT准备写入的数据，实际发送还在后面</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">void</span> <span class="nf">bbUpdateComplete</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// If there is a dshot command loaded up, time it correctly with motor update</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">dshotCommandQueueEmpty</span><span class="p">())</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">dshotCommandOutputIsEnabled</span><span class="p">(</span><span class="n">bbDevice</span><span class="p">.</span><span class="n">count</span><span class="p">))</span> <span class="p">{</span>
+            <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+<span class="cp">#ifdef USE_DSHOT_CACHE_MGMT
+</span>    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">motorIndex</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">MAX_SUPPORTED_MOTORS</span> <span class="o">&amp;&amp;</span> <span class="n">motorIndex</span> <span class="o">&lt;</span> <span class="n">motorCount</span><span class="p">;</span> <span class="n">motorIndex</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Only clean each buffer once. If all motors are on a common port they'll share a buffer.</span>
+        <span class="n">bool</span> <span class="n">clean</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+        <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">motorIndex</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portOutputBuffer</span> <span class="o">==</span> <span class="n">bbMotors</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portOutputBuffer</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">clean</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">clean</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">SCB_CleanDCache_by_Addr</span><span class="p">(</span><span class="n">bbMotors</span><span class="p">[</span><span class="n">motorIndex</span><span class="p">].</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">portOutputBuffer</span><span class="p">,</span> <span class="n">MOTOR_DSHOT_BUF_CACHE_ALIGN_BYTES</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="cp">#endif
+</span>
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">usedMotorPorts</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">bbPorts</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+
+       <span class="c1">// 切换到输出模式</span>
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>        <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">direction</span> <span class="o">==</span> <span class="n">DSHOT_BITBANG_DIRECTION_INPUT</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">inputActive</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+                <span class="n">bbSwitchToOutput</span><span class="p">(</span><span class="n">bbPort</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">else</span>
+<span class="cp">#endif
+</span>        <span class="p">{</span>
+<span class="cp">#if defined(STM32G4)
+</span>            <span class="c1">// Using circular mode resets the counter one short, so explicitly reload</span>
+            <span class="n">bbSwitchToOutput</span><span class="p">(</span><span class="n">bbPort</span><span class="p">);</span>
+<span class="cp">#endif
+</span>        <span class="p">}</span>
+		<span class="c1">// 开启发送DMA</span>
+        <span class="n">bbDMA_Cmd</span><span class="p">(</span><span class="n">bbPort</span><span class="p">,</span> <span class="n">ENABLE</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// 开启TIM DMA</span>
+    <span class="n">lastSendUs</span> <span class="o">=</span> <span class="n">micros</span><span class="p">();</span>
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">usedMotorPacers</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">bbPacer_t</span> <span class="o">*</span><span class="n">bbPacer</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">bbPacers</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="n">bbTIM_DMACmd</span><span class="p">(</span><span class="n">bbPacer</span><span class="o">-&gt;</span><span class="n">tim</span><span class="p">,</span> <span class="n">bbPacer</span><span class="o">-&gt;</span><span class="n">dmaSources</span><span class="p">,</span> <span class="n">ENABLE</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="dshot校验和">DSHOT校验和</h4>
+
+<p>查看Betaflight中关于DSHOT部分的源码，默认开启了<code class="language-plaintext highlighter-rouge">DSHOT_TELEMETRY</code>就会使用Bidirectional DSHOT</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">FAST_CODE</span> <span class="kt">uint16_t</span> <span class="nf">prepareDshotPacket</span><span class="p">(</span><span class="n">dshotProtocolControl_t</span> <span class="o">*</span><span class="n">pcb</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint16_t</span> <span class="n">packet</span><span class="p">;</span>
+
+    <span class="n">ATOMIC_BLOCK</span><span class="p">(</span><span class="n">NVIC_PRIO_DSHOT_DMA</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">packet</span> <span class="o">=</span> <span class="p">(</span><span class="n">pcb</span><span class="o">-&gt;</span><span class="n">value</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">pcb</span><span class="o">-&gt;</span><span class="n">requestTelemetry</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="mi">0</span><span class="p">);</span>
+        <span class="n">pcb</span><span class="o">-&gt;</span><span class="n">requestTelemetry</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>    <span class="c1">// reset telemetry request to make sure it's triggered only once in a row</span>
+    <span class="p">}</span>
+
+    <span class="c1">// 这里求解出来普通Dshot的后4位的异或和</span>
+    <span class="c1">// compute checksum</span>
+    <span class="kt">unsigned</span> <span class="n">csum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="kt">unsigned</span> <span class="n">csum_data</span> <span class="o">=</span> <span class="n">packet</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">csum</span> <span class="o">^=</span>  <span class="n">csum_data</span><span class="p">;</span>   <span class="c1">// xor data by nibbles</span>
+        <span class="n">csum_data</span> <span class="o">&gt;&gt;=</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="c1">// append checksum</span>
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>    <span class="c1">// 一旦使用了Telemetry 就会反转后四位</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">csum</span> <span class="o">=</span> <span class="o">~</span><span class="n">csum</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="cp">#endif
+</span>    <span class="n">csum</span> <span class="o">&amp;=</span> <span class="mh">0xf</span><span class="p">;</span>
+    <span class="n">packet</span> <span class="o">=</span> <span class="p">(</span><span class="n">packet</span> <span class="o">&lt;&lt;</span> <span class="mi">4</span><span class="p">)</span> <span class="o">|</span> <span class="n">csum</span><span class="p">;</span>
+
+    <span class="k">return</span> <span class="n">packet</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>飞控发送 DSHOT帧，但是最低的4bits=其他4bits做异或和，再取反</p>
+
+<p>如果ESC检测到了这个情况，也就是最低4bits是反的，就会切换模式在同一根线上发送一个Telemetry帧</p>
+
+<h4 id="转速计算">转速计算</h4>
+
+<p>然后这个Telemetry包是这么解析的，Telemetry的原始数据，一共是21bits，其中第一bit一定是0，表示数据开始，而之后紧跟的20bits，其实是每4bits使用GCR转换成的，也就是每5bit解析成一个4bits，然后重新组装</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0 aaaa bbbbb fffff ddddd 原始21bits
+e e e m m m m m m m m m c c c c 解码后原始16bits
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>e e e m m m m m m m m m c c c c 解码后原始16bits
+e e e m m m m m m m m m 校验成功以后的转速数据 12bits
+</code></pre></div></div>
+
+<p>后4个c是异或和的校验码</p>
+
+<p>前间3个e是预周期的位移量，叫做左移位数E</p>
+
+<p>中间9个m是预周期值，这个值需要左移E次，才能得到实际的周期数值</p>
+
+<p>如果仅仅使用12bits来表示转速，还是有点不够，最低转速太高了（主要是这里定义的是两个电极之间的延迟，而不是直接的转速，这样实时性比较高，12bit最大就是4096us，算下来大概最低能检测转速是34，14电极，还是很快的），表示0转速传的值是0xFFF，而非0</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">dshot_decode_eRPM_telemetry_value</span><span class="p">(</span><span class="kt">uint16_t</span> <span class="n">value</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">// eRPM range</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="mh">0x0fff</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// Convert value to 16 bit from the GCR telemetry format (eeem mmmm mmmm)</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x01ff</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="p">((</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0xfe00</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="mi">9</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">DSHOT_TELEMETRY_INVALID</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// Convert period to erpm * 100</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mi">1000000</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">/</span> <span class="mi">100</span> <span class="o">+</span> <span class="n">value</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>通过次方表示，这样实现了仅仅用12位表示接近16位整数的范围的值，实际能表示大概为1-65408，对应可以测量到的电机最小转速就是<code class="language-plaintext highlighter-rouge">1000000/65408=15.28886</code> 每秒   对于14电极的电机来说，大概相当于是转了2圈</p>
+
+<p>而平常对转速的描述是分钟，所以还需要<code class="language-plaintext highlighter-rouge">*60</code>，就变成了eRPM，至于代码里为什么还多了一个<code class="language-plaintext highlighter-rouge">value/2</code>，就不知道了</p>
+
+<p>传回的内容是eRPM/100以后的值，转换成rpm</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Used with serial esc telem as well as dshot telem</span>
+<span class="kt">uint32_t</span> <span class="nf">erpmToRpm</span><span class="p">(</span><span class="kt">uint16_t</span> <span class="n">erpm</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="c1">//  rpm = (erpm * 100) / (motorConfig()-&gt;motorPoleCount / 2)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">erpm</span> <span class="o">*</span> <span class="mi">200</span><span class="p">)</span> <span class="o">/</span> <span class="n">motorConfig</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">motorPoleCount</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="bit-bang实现">bit bang实现</h4>
+
+<p>这里主要是参考一下bit bang是怎么实现的</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#define MOTOR_DSHOT_BIT_PER_SYMBOL         1
+</span>
+<span class="cp">#define MOTOR_DSHOT_STATE_PER_SYMBOL       3  // Initial high, 0/1, low
+#define MOTOR_DSHOT_BIT_HOLD_STATES        3  // 3 extra states at the end of transmission required to allow ESC to sample the last bit correctly.
+</span>
+<span class="cp">#define MOTOR_DSHOT_FRAME_BITS             16
+</span>
+<span class="cp">#define MOTOR_DSHOT_FRAME_TIME_NS(rate)    ((MOTOR_DSHOT_FRAME_BITS / MOTOR_DSHOT_BIT_PER_SYMBOL) * MOTOR_DSHOT_SYMBOL_TIME_NS(rate))
+</span>
+<span class="cp">#define MOTOR_DSHOT_TELEMETRY_WINDOW_US    (30000 + MOTOR_DSHOT_FRAME_TIME_NS(rate) * (1.1)) / 1000
+</span>
+<span class="cp">#define MOTOR_DSHOT_CHANGE_INTERVAL_NS(rate) (MOTOR_DSHOT_SYMBOL_TIME_NS(rate) / MOTOR_DSHOT_STATE_PER_SYMBOL)
+</span>
+<span class="cp">#define MOTOR_DSHOT_GCR_CHANGE_INTERVAL_NS(rate) (MOTOR_DSHOT_CHANGE_INTERVAL_NS(rate) * 5 / 4)
+</span></code></pre></div></div>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// DMA buffers</span>
+<span class="c1">// Note that we are not sharing input and output buffers,</span>
+<span class="c1">// as output buffer is only modified for middle bits</span>
+
+<span class="c1">// DMA output buffer:</span>
+<span class="c1">// DShot requires 3 [word/bit] * 16 [bit] = 48 [word]</span>
+<span class="k">extern</span> <span class="kt">uint32_t</span> <span class="n">bbOutputBuffer</span><span class="p">[</span><span class="n">MOTOR_DSHOT_BUF_CACHE_ALIGN_LENGTH</span> <span class="o">*</span> <span class="n">MAX_SUPPORTED_MOTOR_PORTS</span><span class="p">];</span>
+</code></pre></div></div>
+
+<p>这里主要理解<code class="language-plaintext highlighter-rouge">bbOutputBuffer</code>是怎么设计的</p>
+
+<p>首先DSHOT每一帧一共是16位数据，输出的时候，每一位，用一个<code class="language-plaintext highlighter-rouge">SYMBOL</code>表示。</p>
+
+<p>一个<code class="language-plaintext highlighter-rouge">SYMBOL</code>又有3个状态，也就是<strong>初始-高状态、数据状态、低状态</strong>。</p>
+
+<p>其实它对应的就是DSHOT的帧</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202308141041596.png" alt="image-20230814104138492" /></p>
+
+<p>把bit1和bit0都分解成三份，第一份必然是高，第二份则是1和0的区分，第三份必然是0，当然这样会导致和原始的DSHOT帧的占空比略微不同（原版DSHOT是75%和25%的占空比，现在变成了66%和33%）</p>
+
+<p>每一帧的结尾为了让ESC可以完整采样，又额外加了一个<code class="language-plaintext highlighter-rouge">SYMBOL</code>，不过这个是全高的状态</p>
+
+<ul>
+  <li>主要是如果MCU在输出结束以后立马切换到输入模式，可能会造成传输线上的电平立马被拉低，这可能会导致ESC那边还没采样到最后一位，这个数据就被破坏了，为了确保传输质量，多传输了1bit。</li>
+</ul>
+
+<p>这样得到最后<code class="language-plaintext highlighter-rouge">bbOutputBuffer</code>的长度是51bits</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// DMA input buffer</span>
+<span class="c1">// (30us + &lt;frame time&gt; + &lt;slack&gt;) / &lt;input sampling clock period&gt;</span>
+<span class="c1">// &lt;frame time&gt; = &lt;DShot symbol time&gt; * 16</span>
+<span class="c1">// Temporary size for DS600</span>
+<span class="c1">// &lt;frame time&gt; = 26us</span>
+<span class="c1">// &lt;sampling period&gt; = 0.44us</span>
+<span class="c1">// &lt;slack&gt; = 10%</span>
+<span class="c1">// (30 + 26 + 3) / 0.44 = 134</span>
+<span class="c1">// In some cases this was not enough, so we add 6 extra samples</span>
+<span class="cp">#define DSHOT_BB_PORT_IP_BUF_LENGTH 140
+</span></code></pre></div></div>
+
+<p>通过注释大概可以知道，当发完一个DSHOT帧以后，有30us的时间去切换输入-&gt;输出。</p>
+
+<p>然后就是等待Telemetry，拿到以后，还要空一点点时间给ESC切回去，等下一个帧。</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">decode_bb_value</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">value</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">buffer</span><span class="p">[],</span> <span class="kt">uint32_t</span> <span class="n">count</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">bit</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="cp">#ifndef DEBUG_BBDECODE
+</span>    <span class="n">UNUSED</span><span class="p">(</span><span class="n">buffer</span><span class="p">);</span>
+    <span class="n">UNUSED</span><span class="p">(</span><span class="n">count</span><span class="p">);</span>
+    <span class="n">UNUSED</span><span class="p">(</span><span class="n">bit</span><span class="p">);</span>
+<span class="cp">#endif
+#define iv 0xffffffff
+</span>    <span class="c1">// First bit is start bit so discard it.</span>
+    <span class="n">value</span> <span class="o">&amp;=</span> <span class="mh">0xfffff</span><span class="p">;</span>
+    <span class="c1">// 这里是GCR的字典匹配</span>
+    <span class="k">static</span> <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">decode</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span>
+        <span class="n">iv</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="n">iv</span> <span class="p">};</span>
+	<span class="c1">// 每5位转换成4位的实际值</span>
+    <span class="kt">uint32_t</span> <span class="n">decodedValue</span> <span class="o">=</span> <span class="n">decode</span><span class="p">[</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x1f</span><span class="p">];</span>
+    <span class="n">decodedValue</span> <span class="o">|=</span> <span class="n">decode</span><span class="p">[(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">5</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x1f</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="n">decodedValue</span> <span class="o">|=</span> <span class="n">decode</span><span class="p">[(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">10</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x1f</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">;</span>
+    <span class="n">decodedValue</span> <span class="o">|=</span> <span class="n">decode</span><span class="p">[(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">15</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x1f</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">12</span><span class="p">;</span>
+    
+    <span class="c1">// 计算校验和</span>
+    <span class="kt">uint32_t</span> <span class="n">csum</span> <span class="o">=</span> <span class="n">decodedValue</span><span class="p">;</span>
+    <span class="n">csum</span> <span class="o">=</span> <span class="n">csum</span> <span class="o">^</span> <span class="p">(</span><span class="n">csum</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">);</span> <span class="c1">// xor bytes</span>
+    <span class="n">csum</span> <span class="o">=</span> <span class="n">csum</span> <span class="o">^</span> <span class="p">(</span><span class="n">csum</span> <span class="o">&gt;&gt;</span> <span class="mi">4</span><span class="p">);</span> <span class="c1">// xor nibbles</span>
+
+    <span class="k">if</span> <span class="p">((</span><span class="n">csum</span> <span class="o">&amp;</span> <span class="mh">0xf</span><span class="p">)</span> <span class="o">!=</span> <span class="mh">0xf</span> <span class="o">||</span> <span class="n">decodedValue</span> <span class="o">&gt;</span> <span class="mh">0xffff</span><span class="p">)</span> <span class="p">{</span>
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>        <span class="n">memcpy</span><span class="p">(</span><span class="n">dshotTelemetryState</span><span class="p">.</span><span class="n">inputBuffer</span><span class="p">,</span> <span class="n">sequence</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">sequence</span><span class="p">));</span>
+        <span class="k">for</span> <span class="p">(</span><span class="kt">unsigned</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">bbBuffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">!!</span><span class="p">(</span><span class="n">buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">bit</span><span class="p">));</span>
+        <span class="p">}</span>
+<span class="cp">#endif
+</span>        <span class="n">value</span> <span class="o">=</span> <span class="n">DSHOT_TELEMETRY_INVALID</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="c1">// 计算正确，移除校验和的部分</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">decodedValue</span> <span class="o">&gt;&gt;</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">value</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>由于是3倍采样，所以还有一个函数是<code class="language-plaintext highlighter-rouge">decode_bb_bitband</code>用来从采样数据里筛选出来目标帧，并将其转换成raw数据</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">uint32_t</span> <span class="nf">decode_bb_bitband</span><span class="p">(</span> <span class="kt">uint16_t</span> <span class="n">buffer</span><span class="p">[],</span> <span class="kt">uint32_t</span> <span class="n">count</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">bit</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint8_t</span> <span class="n">startMargin</span><span class="p">;</span>
+
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>    <span class="n">memset</span><span class="p">(</span><span class="n">sequence</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">sequence</span><span class="p">));</span>
+    <span class="n">sequenceIndex</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="cp">#endif
+</span>    <span class="kt">uint32_t</span> <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+    <span class="n">bitBandWord_t</span><span class="o">*</span> <span class="n">p</span> <span class="o">=</span> <span class="p">(</span><span class="n">bitBandWord_t</span><span class="o">*</span><span class="p">)</span><span class="n">BITBAND_SRAM</span><span class="p">((</span><span class="kt">uint32_t</span><span class="p">)</span><span class="n">buffer</span><span class="p">,</span> <span class="n">bit</span><span class="p">);</span>
+    <span class="n">bitBandWord_t</span><span class="o">*</span> <span class="n">b</span> <span class="o">=</span> <span class="n">p</span><span class="p">;</span>
+    <span class="n">bitBandWord_t</span><span class="o">*</span> <span class="n">endP</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="p">(</span><span class="n">count</span> <span class="o">-</span> <span class="n">MIN_VALID_BBSAMPLES</span><span class="p">);</span>
+
+    <span class="c1">// Jump forward in the buffer to just before where we anticipate the first zero</span>
+    <span class="n">p</span> <span class="o">+=</span> <span class="n">preambleSkip</span><span class="p">;</span>
+
+    <span class="c1">// 寻找头 第一bit必然是0，所以找一个下降沿</span>
+    <span class="c1">// Eliminate leading high signal level by looking for first zero bit in data stream.</span>
+    <span class="c1">// Manual loop unrolling and branch hinting to produce faster code.</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">p</span> <span class="o">&lt;</span> <span class="n">endP</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">__builtin_expect</span><span class="p">((</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+            <span class="n">__builtin_expect</span><span class="p">((</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+            <span class="n">__builtin_expect</span><span class="p">((</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+            <span class="n">__builtin_expect</span><span class="p">((</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">),</span> <span class="mi">0</span><span class="p">))</span> <span class="p">{</span>
+            <span class="k">break</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">startMargin</span> <span class="o">=</span> <span class="n">p</span> <span class="o">-</span> <span class="n">b</span><span class="p">;</span>
+    <span class="n">DEBUG_SET</span><span class="p">(</span><span class="n">DEBUG_DSHOT_TELEMETRY_COUNTS</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">startMargin</span><span class="p">);</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">&gt;=</span> <span class="n">endP</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// not returning telemetry is ok if the esc cpu is</span>
+        <span class="c1">// overburdened.  in that case no edge will be found and</span>
+        <span class="c1">// BB_NOEDGE indicates the condition to caller</span>
+        <span class="k">return</span> <span class="n">DSHOT_TELEMETRY_NOEDGE</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="kt">int</span> <span class="n">remaining</span> <span class="o">=</span> <span class="n">MIN</span><span class="p">(</span><span class="n">count</span> <span class="o">-</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">b</span><span class="p">),</span> <span class="p">(</span><span class="kt">unsigned</span> <span class="kt">int</span><span class="p">)</span><span class="n">MAX_VALID_BBSAMPLES</span><span class="p">);</span>
+
+    <span class="n">bitBandWord_t</span><span class="o">*</span> <span class="n">oldP</span> <span class="o">=</span> <span class="n">p</span><span class="p">;</span>
+    <span class="kt">uint32_t</span> <span class="n">bits</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="c1">// 重新标定结尾</span>
+    <span class="n">endP</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="n">remaining</span><span class="p">;</span>
+
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>    <span class="n">sequence</span><span class="p">[</span><span class="n">sequenceIndex</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span> <span class="o">-</span> <span class="n">b</span><span class="p">;</span>
+<span class="cp">#endif
+</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">endP</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// 寻找上升沿</span>
+        <span class="k">do</span> <span class="p">{</span>
+            <span class="c1">// Look for next positive edge. Manual loop unrolling and branch hinting to produce faster code.</span>
+            <span class="k">if</span><span class="p">(</span><span class="n">__builtin_expect</span><span class="p">((</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+               <span class="n">__builtin_expect</span><span class="p">((</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+               <span class="n">__builtin_expect</span><span class="p">((</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+               <span class="n">__builtin_expect</span><span class="p">((</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="p">{</span>
+                <span class="k">break</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="n">endP</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">);</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">endP</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">)</span> <span class="p">{</span>
+
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>            <span class="n">sequence</span><span class="p">[</span><span class="n">sequenceIndex</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span> <span class="o">-</span> <span class="n">b</span><span class="p">;</span>
+<span class="cp">#endif
+</span>            <span class="c1">// 找到一个上升沿</span>
+            <span class="c1">// A level of length n gets decoded to a sequence of bits of</span>
+            <span class="c1">// the form 1000 with a length of (n+1) / 3 to account for 3x</span>
+            <span class="c1">// oversampling.</span>
+            <span class="k">const</span> <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">MAX</span><span class="p">((</span><span class="n">p</span> <span class="o">-</span> <span class="n">oldP</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+            <span class="n">bits</span> <span class="o">+=</span> <span class="n">len</span><span class="p">;</span>
+            <span class="n">value</span> <span class="o">&lt;&lt;=</span> <span class="n">len</span><span class="p">;</span>
+            <span class="n">value</span> <span class="o">|=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+            <span class="n">oldP</span> <span class="o">=</span> <span class="n">p</span><span class="p">;</span>
+            <span class="c1">// 上升沿记录一下</span>
+			
+            <span class="c1">// 找下降沿</span>
+            <span class="c1">// Look for next zero edge. Manual loop unrolling and branch hinting to produce faster code.</span>
+            <span class="k">do</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">__builtin_expect</span><span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+                    <span class="n">__builtin_expect</span><span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+                    <span class="n">__builtin_expect</span><span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">||</span>
+                    <span class="n">__builtin_expect</span><span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="p">{</span>
+                    <span class="k">break</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="n">endP</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">);</span>
+
+            <span class="k">if</span> <span class="p">(</span><span class="n">endP</span> <span class="o">&gt;</span> <span class="n">p</span><span class="p">)</span> <span class="p">{</span>
+
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>                <span class="n">sequence</span><span class="p">[</span><span class="n">sequenceIndex</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span> <span class="o">-</span> <span class="n">b</span><span class="p">;</span>
+<span class="cp">#endif
+</span>                <span class="c1">// 找到下降沿 记录一下</span>
+                <span class="c1">// A level of length n gets decoded to a sequence of bits of</span>
+                <span class="c1">// the form 1000 with a length of (n+1) / 3 to account for 3x</span>
+                <span class="c1">// oversampling.</span>
+                <span class="k">const</span> <span class="kt">int</span> <span class="n">len</span> <span class="o">=</span> <span class="n">MAX</span><span class="p">((</span><span class="n">p</span> <span class="o">-</span> <span class="n">oldP</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+                <span class="n">bits</span> <span class="o">+=</span> <span class="n">len</span><span class="p">;</span>
+                <span class="n">value</span> <span class="o">&lt;&lt;=</span> <span class="n">len</span><span class="p">;</span>
+                <span class="n">value</span> <span class="o">|=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+                <span class="n">oldP</span> <span class="o">=</span> <span class="n">p</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="c1">// 如果找到的bits 少于18，说明不正确</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">bits</span> <span class="o">&lt;</span> <span class="mi">18</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">DSHOT_TELEMETRY_NOEDGE</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// 由于最后一bit可能是高，但是上面的流程可能记录不到，所以会有一个额外的上升沿</span>
+    <span class="c1">// length of last sequence has to be inferred since the last bit with inverted dshot is high</span>
+    <span class="k">const</span> <span class="kt">int</span> <span class="n">nlen</span> <span class="o">=</span> <span class="mi">21</span> <span class="o">-</span> <span class="n">bits</span><span class="p">;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">nlen</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">DSHOT_TELEMETRY_NOEDGE</span><span class="p">;</span>
+    <span class="p">}</span>
+
+<span class="cp">#ifdef DEBUG_BBDECODE
+</span>    <span class="n">sequence</span><span class="p">[</span><span class="n">sequenceIndex</span><span class="p">]</span> <span class="o">=</span> <span class="n">sequence</span><span class="p">[</span><span class="n">sequenceIndex</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">nlen</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="n">sequenceIndex</span><span class="o">++</span><span class="p">;</span>
+<span class="cp">#endif
+</span>
+    <span class="c1">// The anticipated edges were observed</span>
+    <span class="n">preambleSkip</span> <span class="o">=</span> <span class="n">startMargin</span> <span class="o">-</span> <span class="n">DSHOT_TELEMETRY_START_MARGIN</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">nlen</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">value</span> <span class="o">&lt;&lt;=</span> <span class="n">nlen</span><span class="p">;</span>
+        <span class="n">value</span> <span class="o">|=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">nlen</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">decode_bb_value</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">bit</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="bit-bang-驱动">bit bang 驱动</h4>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">bbGpioSetup</span><span class="p">(</span><span class="n">bbMotor_t</span> <span class="o">*</span><span class="n">bbMotor</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbTimerChannelInit</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbDMAPreconfigure</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">,</span> <span class="kt">uint8_t</span> <span class="n">direction</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbDMAIrqHandler</span><span class="p">(</span><span class="n">dmaChannelDescriptor_t</span> <span class="o">*</span><span class="n">descriptor</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbSwitchToOutput</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span> <span class="n">bbPort</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbSwitchToInput</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span> <span class="n">bbPort</span><span class="p">);</span>
+
+<span class="kt">void</span> <span class="nf">bbTIM_TimeBaseInit</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">period</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbTIM_DMACmd</span><span class="p">(</span><span class="n">TIM_TypeDef</span><span class="o">*</span> <span class="n">TIMx</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">TIM_DMASource</span><span class="p">,</span> <span class="n">FunctionalState</span> <span class="n">NewState</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbDMA_ITConfig</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">bbDMA_Cmd</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">,</span> <span class="n">FunctionalState</span> <span class="n">NewState</span><span class="p">);</span>
+<span class="kt">int</span>  <span class="nf">bbDMA_Count</span><span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span><span class="p">);</span>
+
+</code></pre></div></div>
+
+<p>主要接口都在这里，Betaflight底层实现了一个bitbang的标准库还有一个lowlevel的库</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304121532681.png" alt="image-20230412153201606" /></p>
+
+<p>这里就是一些基本的硬件配置，主要就是通过DMA设置GPIO或者读取GPIO</p>
+
+<p>TIM在这里触发的是UpdateEvent，而不是PWM通道，通过Update触发DMA传值给GPIO</p>
+
+<p>在<code class="language-plaintext highlighter-rouge">bbWriteInt</code>中可以看到，给过来的DSHOT数据帧还需要再次被处理，会将整个DSHOT数据翻转</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">void</span> <span class="nf">bbOutputDataSet</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="o">*</span><span class="n">buffer</span><span class="p">,</span> <span class="kt">int</span> <span class="n">pinNumber</span><span class="p">,</span> <span class="kt">uint16_t</span> <span class="n">value</span><span class="p">,</span> <span class="n">bool</span> <span class="n">inverted</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="kt">uint32_t</span> <span class="n">middleBit</span><span class="p">;</span>
+	
+    <span class="c1">// 使用telemetery 就需要翻转中间bit</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">inverted</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// 是写入GPIO BSRR 所以低位写1置位</span>
+        <span class="n">middleBit</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">pinNumber</span> <span class="o">+</span> <span class="mi">0</span><span class="p">));</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="c1">// 高位写1 复位</span>
+        <span class="n">middleBit</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">pinNumber</span> <span class="o">+</span> <span class="mi">16</span><span class="p">));</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">pos</span> <span class="o">&lt;</span> <span class="mi">16</span><span class="p">;</span> <span class="n">pos</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// 这里则是翻转BIT</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x8000</span><span class="p">))</span> <span class="p">{</span>
+            <span class="n">buffer</span><span class="p">[</span><span class="n">pos</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">|=</span> <span class="n">middleBit</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="n">value</span> <span class="o">&lt;&lt;=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>DMA中断处理程序，可以看到如果开启了Telemetry那么会在DMA完成以后切换到输入模式。</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">FAST_IRQ_HANDLER</span> <span class="kt">void</span> <span class="nf">bbDMAIrqHandler</span><span class="p">(</span><span class="n">dmaChannelDescriptor_t</span> <span class="o">*</span><span class="n">descriptor</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="n">dbgPinHi</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+
+    <span class="n">bbPort_t</span> <span class="o">*</span><span class="n">bbPort</span> <span class="o">=</span> <span class="p">(</span><span class="n">bbPort_t</span> <span class="o">*</span><span class="p">)</span><span class="n">descriptor</span><span class="o">-&gt;</span><span class="n">userParam</span><span class="p">;</span>
+
+    <span class="n">bbDMA_Cmd</span><span class="p">(</span><span class="n">bbPort</span><span class="p">,</span> <span class="n">DISABLE</span><span class="p">);</span>
+
+    <span class="n">bbTIM_DMACmd</span><span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">timhw</span><span class="o">-&gt;</span><span class="n">tim</span><span class="p">,</span> <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">dmaSource</span><span class="p">,</span> <span class="n">DISABLE</span><span class="p">);</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">DMA_GET_FLAG_STATUS</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span> <span class="n">DMA_IT_TEIF</span><span class="p">))</span> <span class="p">{</span>
+        <span class="k">while</span> <span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{};</span>
+    <span class="p">}</span>
+
+    <span class="n">DMA_CLEAR_FLAG</span><span class="p">(</span><span class="n">descriptor</span><span class="p">,</span> <span class="n">DMA_IT_TCIF</span><span class="p">);</span>
+
+<span class="cp">#ifdef USE_DSHOT_TELEMETRY
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">useDshotTelemetry</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">direction</span> <span class="o">==</span> <span class="n">DSHOT_BITBANG_DIRECTION_INPUT</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">telemetryPending</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="cp">#ifdef DEBUG_COUNT_INTERRUPT
+</span>            <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">inputIrq</span><span class="o">++</span><span class="p">;</span>
+<span class="cp">#endif
+</span>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="cp">#ifdef DEBUG_COUNT_INTERRUPT
+</span>            <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">outputIrq</span><span class="o">++</span><span class="p">;</span>
+<span class="cp">#endif
+</span>
+            <span class="c1">// Switch to input</span>
+
+            <span class="n">bbSwitchToInput</span><span class="p">(</span><span class="n">bbPort</span><span class="p">);</span>
+            <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">telemetryPending</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+
+            <span class="n">bbTIM_DMACmd</span><span class="p">(</span><span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">timhw</span><span class="o">-&gt;</span><span class="n">tim</span><span class="p">,</span> <span class="n">bbPort</span><span class="o">-&gt;</span><span class="n">dmaSource</span><span class="p">,</span> <span class="n">ENABLE</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="cp">#endif
+</span>    <span class="n">dbgPinLo</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="小结">小结</h4>
+
+<p>bitbang通过TIM的update事件，启动DMA，当DMA被触发时，读取或者写入值到GPIO的寄存器，从而实现GPIO模拟PWM。</p>
+
+<p>启动DMA写入时，DMA只是单次执行，执行完成以后立马将GPIO切换到输入模式，输入模式下的DMA也是单次执行。</p>
+
+<p>当DMA读取完成以后，立马将GPIO再切换回输出模式，继续DMA写，开始下一轮循环。</p>
+
+<p>读取到的GPIO变化后，再通过GCR解码，获取到解码后的Telemetry，然后计算出来erpm，再转成rpm。</p>
+
+<h2 id="run-length-limited">Run-length limited</h2>
+
+<p>Run-length limited 这个概念国内搜起来很容易和游程搞混，其实是不一样的东西，游程在这里其实和Dshot GCR没啥关系</p>
+
+<h3 id="游程">游程</h3>
+
+<p>游程，一个序列中取值相同，连在一起的元素合起来叫做一个游程，连续元素的个数，叫做这个游程的长度</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0 0 0 1 1 1 1 0 1 0 1 1 0 0 1
+  0      1    0 1 0  1   0  1
+</code></pre></div></div>
+
+<p>比如上述，一共15个bit，也就游程长度是8</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>其中长度为4的是：1111
+其中长度为3的是：000
+其中长度为2的是：11，00
+其中长度为1的是：0，1，0，1
+</code></pre></div></div>
+
+<h4 id="游程长度编码rlcrun-length-code">游程长度编码（RLC，Run-length Code）</h4>
+
+<p>现在使用游程多半是用来压缩数据的，以前使用游程可能是为了兼容硬件上的某些情况而不得不用。游程长度编码是十分简单的压缩方式，编码速度也非常快，核心就是通过去除冗余字符，来减少数据文件所占存储空间的目的</p>
+
+<p>简单来说，游程长度编码的主要任务是统计连续相同字符的个数，解码时要根据字符及连续相同字符的个数，恢复原来的数据</p>
+
+<p>一般来说使用<code class="language-plaintext highlighter-rouge">(n,m)</code>来表示,就是说有m个形式为n的字符，对于比特流之类的东西，就可以用这种方式编码，来减少传输量</p>
+
+<p>这些概念其实和DSHOT这里要用的没啥关系，但是由于描述很像，容易搞混。</p>
+
+<h3 id="rll">RLL</h3>
+
+<p>RLL，其实是以前的模电和数电转换的时候，都是通过电平变化来识别0或者1的，由于机械或者物理性能限制，导致这种方式想要表示0或者1，他们的物理实现频率是不同的。比如你1秒可以写1000次1，而写0的频率只能达到500次，在这种情况下限制波特率的就是写0的次数了，想要最大化带宽，就必须尽可能少的写0，RLL在此时就有用了。</p>
+
+<p>RLL(n,m)，指定两个连续1之间，最少有n个0，最多有m个0。其实RLL还有2个参数，剩下这个两个其实就是编码前的bit数量，一般用来说明传输速度的改变</p>
+
+<p>RLL还有一个特性，<strong>在调制解调中，只有电平变化，才表示bit发生了改变，否则认为是0</strong>，如果没有这个前提，下面的图示根本看不懂</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202307081156713.png" alt="image-20230708115638539" /></p>
+
+<h4 id="常见的编码方式">常见的编码方式</h4>
+
+<h4 id="fm01-rll">FM:(0,1) RLL</h4>
+
+<p><strong>FM:(0,1) RLL</strong>，这种方式看起来只是多了一个<code class="language-plaintext highlighter-rouge">1</code>，实际上这个1可以作为时钟的<code class="language-plaintext highlighter-rouge">1</code>，从而可以形成差分编码的方式，这种方式让编码变长了，但是传输效率提升了。</p>
+
+<p>其实是当年FM调配的物理实现有些不同，物理上写1的频率是写0的两倍，所以这里增加<code class="language-plaintext highlighter-rouge">1</code>刚好满足了写1的速度，让两边可以同步控制</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0 -&gt; 10
+1 -&gt; 11
+</code></pre></div></div>
+
+<p>通过RLL(0,1)编码后，两个连续1之间最少是0个0 <code class="language-plaintext highlighter-rouge">11 11</code>，最多是1个0 <code class="language-plaintext highlighter-rouge">11 10 11</code></p>
+
+<p><code class="language-plaintext highlighter-rouge">10110010 -&gt; 1110111110101110</code></p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304111111728.png" alt="image-20230411111133673" /></p>
+
+<p>图中下面的尖峰是表示电平翻转，而平表示没产生变化，红点则是每个数据之间的分割点，刚好是编码后的样子，同时符合RLL特性的</p>
+
+<h4 id="gcr02-rll">GCR:(0,2) RLL</h4>
+
+<p><strong>GCR:(0,2) RLL</strong>，这个是IBM提出来的一种编码方式，主要是用来提高传输的速率，通过这种编码方式，将最多相邻的0，控制在了2个以内，从而提高了传输速度</p>
+
+<p>这相邻的0，在后续的解包中提供了非常重要的作用，当0过多的时候，由于采样比较低，就容易出现无法识别清楚当前到底是出现了2个0还是1个0，同理当0最多只有2个的时候，低采样时就能轻易区分1个0和2个0的情况。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0000 -&gt; 11001
+0001 -&gt; 11011
+0010 -&gt; 10010
+0011 -&gt; 10011
+0100 -&gt; 11101
+0101 -&gt; 10101
+0110 -&gt; 10110
+0111 -&gt; 10111
+1000 -&gt; 11010
+1001 -&gt; 01001
+1010 -&gt; 01010
+1011 -&gt; 01011
+1100 -&gt; 11110
+1101 -&gt; 01101
+1110 -&gt; 01110
+1111 -&gt; 01111
+</code></pre></div></div>
+
+<p>比如传输下面的数据</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1011 0010 -&gt; 01011 10010
+</code></pre></div></div>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304111120811.png" alt="image-20230411112019756" /></p>
+
+<p>就变成了图中所示情况</p>
+
+<p>这种编码方式，如果要进行检测，那么只需要在每个沿时间进行检测即可，比如下图中的绿色箭头所在即是<code class="language-plaintext highlighter-rouge">沿</code>检测</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304111143652.png" alt="image-20230411114300590" /></p>
+
+<p>红点是每一段的分割点，这个<code class="language-plaintext highlighter-rouge">沿</code>不进行检测。可以看到<code class="language-plaintext highlighter-rouge">沿</code>刚好是编码中隐藏的原始数据，电平发生翻转表示1，电平不动表示0</p>
+
+<p>有了这里的想法，用GPIO的跳变检测就更加简单了</p>
+
+<h2 id="其他相关问题">其他相关问题</h2>
+
+<p>如果ESC种设置了，<code class="language-plaintext highlighter-rouge">Auto Telemetry</code>，那么如果不使用Dshot协议，这个Telemetry也会自动返回相关信息，所以对其他协议更友好了。</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304071829272.png" alt="image-20230407182415582" /></p>
+
+<blockquote>
+  <p>https://github.com/iNavFlight/inav/issues/5165</p>
+</blockquote>
+
+<p>单线Dshot 由于检测时间比较少，Dshot 600 出现了大量报错，导致Betaflight直接不再支持Dshot 600</p>
+
+<blockquote>
+  <p>https://github.com/bitdump/BLHeli/issues/464</p>
+
+  <p>https://github.com/betaflight/betaflight/issues/9886#issuecomment-655085419</p>
+</blockquote>
+
+<h2 id="实测图像">实测图像</h2>
+
+<p>网上想找个DSHOT各种图像还是挺困难的，要么看不清，要么也没说明具体数值是多少，看的一脸懵逼，我给出一些实例，方便参考对比</p>
+
+<ul>
+  <li>注意需要连续给Bidirectional DSHOT帧，并且让出传输线，ESC开始阶段是不能回复Telemetry的，需要正确输出一段时间电调解锁以后才能得到回复，电调音乐会阻止Telemetry的输出，所以实际输出是电调解锁音乐之后，刚开始只用一次帧来触发回复怎么都得不到，后来连续给就正常了。</li>
+</ul>
+
+<h4 id="dshot-300">DSHOT 300</h4>
+
+<p>以下所有图像都是基于DSHOT 300来说明的，其他频率会有所不同，需要单独测试</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304171849696.png" alt="image-20230417184900614" /></p>
+
+<p>这是正常的DSHOT 300，没有反转校验位、没有请求Telemetry的<code class="language-plaintext highlighter-rouge">48</code>油门输出</p>
+
+<h4 id="bidirectional-dshot-300">Bidirectional DSHOT 300</h4>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304181908889.png" alt="image-20230418190834806" /></p>
+
+<p>这是反转后、没有请求Telemetry的图像，油门值还是<code class="language-plaintext highlighter-rouge">48</code></p>
+
+<h4 id="bidirectional-dshot-300-with-telemetry">Bidirectional DSHOT 300 with Telemetry</h4>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304191450067.png" alt="image-20230419145052982" /></p>
+
+<p>这是反转后并且请求Telemetry的，并且ESC回复了Telemetry，油门值还是<code class="language-plaintext highlighter-rouge">48</code></p>
+
+<h4 id="解析telemetry图像">解析Telemetry图像</h4>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304191648549.png" alt="image-20230419164812468" /></p>
+
+<p>发送完Bidirectional DSHOT帧以后，大概就是30us的时间，留给IO切换到输入模式，并等待Telemetry返回</p>
+
+<p>整个Telemetry信号时间大概是47us，实际情况可能话要多一点</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304191704619.png" alt="image-20230419170345087" /></p>
+
+<p>第一bit必然是0，表示开始传输，所以跳过，然后根据GCR的编码方式，每次电平跳变就是数据1，否则是数据0。</p>
+
+<p>此时是在0速度的情况下，获取的Telemetry，所以最后解码得到的数值是<code class="language-plaintext highlighter-rouge">1111 1111 1111 0000</code> ，把<code class="language-plaintext highlighter-rouge">0xFFF0</code>带入校验，结果是<code class="language-plaintext highlighter-rouge">0xF</code>，校验正确。</p>
+
+<p>接着取转速以后是<code class="language-plaintext highlighter-rouge">0x0FFF</code>，在转换成转速的时候，这个特殊值，直接转换成了<code class="language-plaintext highlighter-rouge">0</code>，表示<strong>当前无法测量转速</strong>，因为此时没转起来，现实和理论是符合的</p>
+
+<h4 id="timing">Timing</h4>
+
+<p>检测和回复Telemetry各有一个关键时间</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202307031610970.png" alt="image-20230703161054914" /></p>
+
+<p>Telemetry的回复时间是发送DSHOT帧之后，<strong>31us左右</strong>，就会回复，如果此时IO没切换到输入模式，则会丢失。</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202307031609336.png" alt="image-20230703160945176" /></p>
+
+<p>第二个关键时间，是Telemetry回复以后，必须快速再切换回输出模式，比如上图中可以看到虽然正确切换到了输入，但是输入模式保留时间过长了，导致ESC无法识别DSHOT帧，电机就不会解锁，自然也就没有任何输出。</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202307031610901.png" alt="image-20230703161004821" /></p>
+
+<p>这个图是极限切换时间，就是当Telemetry回复以后，2.4us内就切换到了输入模式，并且继续发下一个DSHOT帧，此时ESC可以正常响应。</p>
+
+<p>但是实际上不应该这么极限，最少要给ESC一帧的反应时间，也就是3.3us</p>
+
+<p><del>实际第一个DSHOT帧和第二个DSHOT帧之间需要保证时间在<strong>87-106us</strong>，否则会出现ESC长时间都无法解锁，更不会回复Telemetry。</del></p>
+
+<p>由于<strong>回复响应是31us</strong>左右，而Telemetry的<strong>回复帧长度大概在52us</strong>左右，<del>那么剩下留给输入切换到输出的时间就是<strong>4-23us</strong>，尽量不要卡这种极限，容易出现无法识别的情况。</del></p>
+
+<p><strong>以上数值都是基于我的DSHOT300来测试的，我此时的DSHOT单bit是3.3us周期</strong></p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202403081525395.png" alt="image-20240308152530347" /></p>
+
+<p>DSHOT600的情况下，一个循环大概是249.5us，换算下来DSHOT控制和获取Telemetry的频率是4000Hz （其实换成DSHOT300也是大概4000Hz，这个主要是受限于主控的GPIO和TIM在输入输出切换的时间，实际上具体是DSHOT反倒没多大影响）</p>
+
+<h2 id="新驱动设计"><del>新驱动设计</del></h2>
+
+<p>bit bang是通过三倍采样，来读取下面的每一个电变化的（红圈部分）</p>
+
+<p><img src="https://img.elmagnifico.tech/static/upload/elmagnifico/202304181927844.png" alt="image-20230418192723771" /></p>
+
+<p><del>但是其实我可以通过绿色箭头标明的沿来判断，当前数值，直接就能读取到原始bit中的所有1，其余位就自动是0了。</del></p>
+
+<p><del>黄色箭头虽然也是沿，但是由于是4bit的分割点，所以不纳入计算。</del></p>
+
+<p><del>这样的话，完全不需要3倍的采样timer，不会受到DSHOT频率的影响，无论多快的频率都能处理。</del></p>
+
+<p><del><strong>核心想法：</strong></del></p>
+
+<p><del>通过GPIO的上升沿、下降沿中断，记录所有1，并记录1产生的时间，通过5bits时间，可以排除掉黄色的下降沿或者上升沿，只需要一个100ns定时器即可。</del></p>
+
+<p><del>如果定时器超时了，那么就认为本次失败了，直接关闭中断，切换回输出模式。只需要将每个1之间的时间除以固定的区间，就能得到1的位置了。</del></p>
+
+<p>这个想法有点问题，IO中断非常频繁，会影响到其他地方，所以还是DMA来干这个事情更好点</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>到这里差不多整个Bidirectional DSHOT基本就解析完了，日后如果要移植双向DSHOT，可以参考</p>
+
+<h2 id="quote">Quote</h2>
+
+<blockquote>
+  <p>https://github.com/betaflight/betaflight/pull/8554</p>
+
+  <p>https://zhuanlan.zhihu.com/p/520878086</p>
+
+  <p>https://en.wikipedia.org/wiki/Run-length_limited#GCR:_(0,2)_RLL</p>
+
+  <p>https://github.com/iNavFlight/inav/issues/2710</p>
+
+  <p>https://github.com/iNavFlight/inav/issues/5165</p>
+
+  <p>https://github.com/iNavFlight/inav/pull/5674</p>
+
+  <p>https://youtu.be/sPktdBh2Gcw</p>
+
+  <p>https://github.com/mathiasvr/bluejay/issues/1</p>
+
+  <p>https://github.com/bitdump/BLHeli/issues/513</p>
+
+  <p>https://betaflight.com/docs/wiki/archive/DSHOT-ESC-Protocol</p>
+
+  <p>https://betaflight.com/docs/development/Dshot</p>
+
+  <p>https://betaflight.com/docs/tuning/4.2-Tuning-Notes#dshot-settings</p>
+
+  <p>https://github.com/bitdump/BLHeli/issues/685</p>
+
+  <p>https://brushlesswhoop.com/dshot-and-bidirectional-dshot/</p>
+</blockquote>
+
+
+
+                <hr style="visibility: hidden;">
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2023/04/01/uboot/" data-toggle="tooltip" data-placement="top" title="编译onion的u-boot">
+                        Previous<br>
+                        <span>编译onion的u-boot</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2023/04/08/sub-web-subconverter/" data-toggle="tooltip" data-placement="top" title="自建订阅转换">
+                        Next<br>
+                        <span>自建订阅转换</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- disqus 评论框 start -->
+                <div class="comment">
+                    <div id="disqus_thread" class="disqus-thread"></div>
+                </div>
+                <!-- disqus 评论框 end -->
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#RaspberryPi" title="RaspberryPi" rel="9">
+                                    RaspberryPi
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#嵌入式" title="嵌入式" rel="30">
+                                    嵌入式
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Git" title="Git" rel="7">
+                                    Git
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#脚本" title="脚本" rel="2">
+                                    脚本
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#python" title="python" rel="19">
+                                    python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#LeetCode" title="LeetCode" rel="30">
+                                    LeetCode
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#C++" title="C++" rel="10">
+                                    C++
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#APM" title="APM" rel="2">
+                                    APM
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#FreeRTOS" title="FreeRTOS" rel="26">
+                                    FreeRTOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Markdown" title="Markdown" rel="5">
+                                    Markdown
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Embedded" title="Embedded" rel="30">
+                                    Embedded
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#SD" title="SD" rel="2">
+                                    SD
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Linux" title="Linux" rel="2">
+                                    Linux
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Vim" title="Vim" rel="2">
+                                    Vim
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Ubuntu" title="Ubuntu" rel="2">
+                                    Ubuntu
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tools" title="Tools" rel="8">
+                                    Tools
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#STM32" title="STM32" rel="17">
+                                    STM32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Maya" title="Maya" rel="22">
+                                    Maya
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LPWAN" title="LPWAN" rel="3">
+                                    LPWAN
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Graph Theory" title="Graph Theory" rel="3">
+                                    Graph Theory
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Algorithm" title="Algorithm" rel="4">
+                                    Algorithm
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#PathFind" title="PathFind" rel="14">
+                                    PathFind
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OMPL" title="OMPL" rel="7">
+                                    OMPL
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#VPS" title="VPS" rel="33">
+                                    VPS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QT" title="QT" rel="3">
+                                    QT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Router" title="Router" rel="2">
+                                    Router
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JS" title="JS" rel="2">
+                                    JS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Chrome" title="Chrome" rel="2">
+                                    Chrome
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Tampermonkey" title="Tampermonkey" rel="2">
+                                    Tampermonkey
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#API" title="API" rel="3">
+                                    API
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Java" title="Java" rel="6">
+                                    Java
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Spring" title="Spring" rel="2">
+                                    Spring
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#MySql" title="MySql" rel="2">
+                                    MySql
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Springboot" title="Springboot" rel="8">
+                                    Springboot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Docker" title="Docker" rel="3">
+                                    Docker
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#V2ray" title="V2ray" rel="5">
+                                    V2ray
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#TTRSS" title="TTRSS" rel="2">
+                                    TTRSS
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Nintendo Switch" title="Nintendo Switch" rel="12">
+                                    Nintendo Switch
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Trace" title="Trace" rel="3">
+                                    Trace
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Crack" title="Crack" rel="11">
+                                    Crack
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#BLHeli" title="BLHeli" rel="10">
+                                    BLHeli
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#DSHOT" title="DSHOT" rel="2">
+                                    DSHOT
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ESC" title="ESC" rel="2">
+                                    ESC
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Music" title="Music" rel="5">
+                                    Music
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C#" title="C#" rel="5">
+                                    C#
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#EasyCon" title="EasyCon" rel="8">
+                                    EasyCon
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blog" title="Blog" rel="6">
+                                    Blog
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#杂谈" title="杂谈" rel="6">
+                                    杂谈
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Proxy" title="Proxy" rel="4">
+                                    Proxy
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#UAV" title="UAV" rel="3">
+                                    UAV
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#GuinnessWorldRecords" title="GuinnessWorldRecords" rel="3">
+                                    GuinnessWorldRecords
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NAS" title="NAS" rel="3">
+                                    NAS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#群晖" title="群晖" rel="3">
+                                    群晖
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#ZeroTier" title="ZeroTier" rel="3">
+                                    ZeroTier
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Typora" title="Typora" rel="3">
+                                    Typora
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Map" title="Map" rel="2">
+                                    Map
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#旅游" title="旅游" rel="15">
+                                    旅游
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Log" title="Log" rel="2">
+                                    Log
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#JSON" title="JSON" rel="2">
+                                    JSON
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Cython" title="Cython" rel="2">
+                                    Cython
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Equip" title="Equip" rel="16">
+                                    Equip
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Goods" title="Goods" rel="8">
+                                    Goods
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Share" title="Share" rel="5">
+                                    Share
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DMX512" title="DMX512" rel="2">
+                                    DMX512
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Blender" title="Blender" rel="3">
+                                    Blender
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Game" title="Game" rel="32">
+                                    Game
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#AP" title="AP" rel="3">
+                                    AP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Network" title="Network" rel="10">
+                                    Network
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#CloudFlare" title="CloudFlare" rel="2">
+                                    CloudFlare
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#DIY" title="DIY" rel="5">
+                                    DIY
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#WIFI" title="WIFI" rel="2">
+                                    WIFI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Camera" title="Camera" rel="2">
+                                    Camera
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Life" title="Life" rel="2">
+                                    Life
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Diablo" title="Diablo" rel="10">
+                                    Diablo
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Sensor" title="Sensor" rel="2">
+                                    Sensor
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SES" title="SES" rel="6">
+                                    SES
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#QQ" title="QQ" rel="3">
+                                    QQ
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Bot" title="Bot" rel="3">
+                                    Bot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Python" title="Python" rel="7">
+                                    Python
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Vmq" title="Vmq" rel="2">
+                                    Vmq
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Jenkins" title="Jenkins" rel="4">
+                                    Jenkins
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#米家" title="米家" rel="8">
+                                    米家
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ESP32" title="ESP32" rel="6">
+                                    ESP32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Software" title="Software" rel="5">
+                                    Software
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#C" title="C" rel="4">
+                                    C
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MT793x" title="MT793x" rel="5">
+                                    MT793x
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#NXP" title="NXP" rel="4">
+                                    NXP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CH32" title="CH32" rel="2">
+                                    CH32
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#OpenWrt" title="OpenWrt" rel="4">
+                                    OpenWrt
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Onion" title="Onion" rel="2">
+                                    Onion
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Copilot" title="Copilot" rel="2">
+                                    Copilot
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Cursor" title="Cursor" rel="6">
+                                    Cursor
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Investment" title="Investment" rel="2">
+                                    Investment
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#ChatGPT" title="ChatGPT" rel="4">
+                                    ChatGPT
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#SFX" title="SFX" rel="2">
+                                    SFX
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Debug" title="Debug" rel="2">
+                                    Debug
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#RouterOS" title="RouterOS" rel="5">
+                                    RouterOS
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Mikrotik" title="Mikrotik" rel="5">
+                                    Mikrotik
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#GitLab" title="GitLab" rel="2">
+                                    GitLab
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Drone" title="Drone" rel="2">
+                                    Drone
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#OpenAI" title="OpenAI" rel="4">
+                                    OpenAI
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#VS Code" title="VS Code" rel="4">
+                                    VS Code
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#管理" title="管理" rel="6">
+                                    管理
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#build" title="build" rel="6">
+                                    build
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Kconfig" title="Kconfig" rel="5">
+                                    Kconfig
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#CMake" title="CMake" rel="6">
+                                    CMake
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Su7 Ultra" title="Su7 Ultra" rel="14">
+                                    Su7 Ultra
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#Car" title="Car" rel="14">
+                                    Car
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#AI" title="AI" rel="19">
+                                    AI
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#MCP" title="MCP" rel="3">
+                                    MCP
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#LLM" title="LLM" rel="2">
+                                    LLM
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Art" title="Art" rel="3">
+                                    Art
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#审美" title="审美" rel="3">
+                                    审美
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Skills" title="Skills" rel="2">
+                                    Skills
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#Agent" title="Agent" rel="7">
+                                    Agent
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="https://blog.l0v0.com/">智伤帝</a></li>
+                    
+                        <li><a href="http://smilejing.cn/">小静的博客</a></li>
+                    
+                        <li><a href="https://blog.whuzfb.cn/">晨曦的博客</a></li>
+                    
+                        <li><a href="https://hiripple.com/">hiRipple</a></li>
+                    
+                        <li><a href="https://www.gaicas.com/">草东日记</a></li>
+                    
+                        <li><a href="https://molunerfinn.com/">MARKSZのBlog</a></li>
+                    
+                        <li><a href="http://等你成为我的朋友">等你成为我的朋友</a></li>
+                    
+                        <li><a href="http://Wait for you">Wait for you</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+<!-- add support for mathjax -->
+
+
+<!-- add support for mermaid -->
+
+
+
+<!-- disqus 公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES * * */
+    var disqus_shortname = "elmagnifico-1";
+    var disqus_identifier = "/2023/04/07/bi-directional-DSHOT";
+    var disqus_url = "https://elmagnifico.tech/2023/04/07/bi-directional-DSHOT/";
+
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<!-- disqus 公共JS代码 end -->
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async('/js/anchor.min.js',function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+
+    <!-- Footer -->
+<footer data-pagefind-ignore>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">
+                    
+                    <li>
+                        <a href="/feed.xml">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                    
+                    
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/elmagnificogi">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                    
+                    <li>
+                        <a target="_blank" href="tencent://message/?uin=363562671&Site=&Menu=no">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-qq fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://t.me/elmagnificote">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-telegram fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://steamcommunity.com/id/elmagnificost">
+                                    <span class="fa-stack fa-lg">
+                                        <i class="fa fa-circle fa-stack-2x"></i>
+                                        <i class="fa fa-steam fa-stack-1x fa-inverse"></i>
+                                    </span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+                <p class="copyright text-muted">
+                    <span id="busuanzi_container_site_pv">本站总访问量<span id="fix_site_pv"></span>次<span id="busuanzi_value_site_pv" style="display: none;"></span></span>
+                    <span id="busuanzi_container_site_uv">访客数<span id="fix_site_uv"></span>人<span id="busuanzi_value_site_uv" style="display: none;"></span></span>
+                    <br>
+                    <span id="timeDate">载入天数...</span><span id="times">载入时分秒...</span>
+                    <br>
+                    Copyright &copy; Elmagnifico's Blog 2026
+                    <br>
+                    Theme by <a href="https://github.com/elmagnificogi/elmagnificogi.github.io">elmagnifico</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- back-to-top -->
+<div id="back-top">
+    <a href="#section" data-toggle="tooltip" data-placement="top" title="top">
+    <i class="fa fa-chevron-up" aria-hidden="true"></i>
+    </a>
+</div>
+
+<!-- jQuery -->
+<script src="/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<!-- Currently, only navbar scroll-down effect at desktop still depends on this -->
+<script src="/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/js/blog.min.js "></script>
+
+<!-- Service Worker -->
+
+<script src="/js/snackbar.js "></script>
+<script src="/js/sw-registration.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!-- jquery.tagcloud.js -->
+<script>
+    // only load tagcloud.js in tag.html
+    if($('#tag_cloud').length !== 0){
+        async('/js/jquery.tagcloud.js',function(){
+            $.fn.tagcloud.defaults = {
+                //size: {start: 1, end: 1, unit: 'em'},
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+<!-- fastClick.js -->
+<script>
+    async('/js/fastclick.min_4.js', function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0KN6WQKYCB"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-0KN6WQKYCB');
+</script>
+
+
+
+
+<!-- 不蒜子统计 -->
+<script defer src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+<!-- 运行时间统计 -->
+<script>
+    var now = new Date();
+    var getStatistics = false;
+    var changeDone = false;
+    function createtime() {
+        var grt= new Date("11/01/2015 20:01:26");
+        now.setTime(now.getTime()+250);
+        days = (now - grt ) / 1000 / 60 / 60 / 24; dnum = Math.floor(days);
+        hours = (now - grt ) / 1000 / 60 / 60 - (24 * dnum); hnum = Math.floor(hours);
+        if(String(hnum).length ==1 ){hnum = "0" + hnum;} minutes = (now - grt ) / 1000 /60 - (24 * 60 * dnum) - (60 * hnum);
+        mnum = Math.floor(minutes); if(String(mnum).length ==1 ){mnum = "0" + mnum;}
+        seconds = (now - grt ) / 1000 - (24 * 60 * 60 * dnum) - (60 * 60 * hnum) - (60 * mnum);
+        snum = Math.round(seconds); if(String(snum).length ==1 ){snum = "0" + snum;}
+        document.getElementById("timeDate").innerHTML = "本站已运行 "+dnum+" 天 ";
+        document.getElementById("times").innerHTML = hnum + " 小时 " + mnum + " 分 " + snum + " 秒";
+        // 补充统计
+        if(!getStatistics && ""!=document.getElementById("busuanzi_value_site_uv").innerHTML){getStatistics = true;}
+        if(getStatistics && !changeDone) {
+            site_pv = document.getElementById("busuanzi_value_site_pv").innerHTML;
+            site_uv = document.getElementById("busuanzi_value_site_uv").innerHTML;
+            site_pv_num = parseInt(site_pv,10) + 572573;
+            site_uv_num = parseInt(site_uv,10) + 490731;
+            document.getElementById("fix_site_pv").innerHTML = site_pv_num;
+            document.getElementById("fix_site_uv").innerHTML = site_uv_num;
+            changeDone = true;
+        }
+    }
+    createtime();
+     
+    setInterval("createtime()",1000);
+    
+</script>
+
+<!-- back-top -->
+<script type="module">
+    $('#back-top').hide();
+    $(document).ready(function () {
+    $(window).scroll(function () {
+    if ($(this).scrollTop() > 250) {
+      $('#back-top').fadeIn();
+    } else {
+      $('#back-top').fadeOut();
+    }
+    });
+    $('#back-top a').click(function () {
+    $('body,html').animate({
+      scrollTop: 0
+    }, 800);
+    return false;
+    });
+  });
+  </script>
+
+
+
+
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog (selector) {
+        // init
+        var P = $('div.post-container'), a, n, t, l, i, c;
+
+        a = P.find('h1,h2,h3,h4,h5,h6');
+
+        // clean
+        $(selector).html('')
+
+        // appending
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#"+$(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="'+i+'" rel="nofollow">'+t+'</a>');
+            l = $('<li class="'+n+'_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function(e){
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     */
+    async("/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+<pagefind-config bundle-path="/pagefind/" meta-cache-tag="1788333363"></pagefind-config>
+<script src="/pagefind/pagefind-component-ui.js" type="module"></script>
+<script src="/js/search-cjk-fallback.js" defer></script>
+<pagefind-modal reset-on-close="true"></pagefind-modal>
+<script>
+(function () {
+  var link = document.getElementById('blog-nav-search');
+  if (!link) return;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    var modal = document.querySelector('pagefind-modal');
+    if (modal && typeof modal.open === 'function') {
+      modal.open();
+      return;
+    }
+    console.warn('[search] Pagefind 未加载，请先执行 npm run build:search 或在服务器跑 deploy.sh');
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      link.click();
+    }
+  });
+})();
+</script>
+
+
+
+</body>
+
+</html>
