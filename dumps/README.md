@@ -16,8 +16,14 @@ blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
     --out dumps/ak32-32.7-backup.bin
 ```
 
-**Not committed to git for now** — `.gitignore` at the project root excludes `dumps/*.bin` and
-`dumps/*.hex`. This is a temporary default, not a permanent rule: the project's actual intent
-(`PLAN.md` §8) is to eventually publish official firmware dumps as a public community resource,
-once extraction/re-flashing is confirmed reproducible. Publishing needs explicit approval at that
-time (`PLAN.md` §8's hard gate) — not just deleting these `.gitignore` lines on momentum.
+Also the destination for raw Setup-block backups: `dump-config --raw-dir dumps` saves each dumped
+ESC's exact 256-byte ciphertext to `esc<N>-setup-<timestamp>.bin` — a byte-exact backup usable for
+a full restore, unlike `--out`'s decoded-fields-only partial-backup file. Confirmed valuable in
+practice: 2026-09-07's real-hardware corruption incident (`docs/knowledge/hardware-findings.md`)
+was only repairable because a byte-identical sibling ESC existed to copy from — capture these
+routinely, not just before a risky experiment.
+
+**Whitelisted, not gitignored (2026-09-07)** — see `AGENTS.md`'s Publishing Gate. Everything here
+is this project's own extraction from the user's own owned hardware, not a vendor-released binary
+— the same category as the `.ixi`/`.xlg` files under `docs/knowledge/`. Fine to commit and publish
+like any other file in this repo, following the same approval process as any push.

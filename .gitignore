@@ -7,15 +7,10 @@ __pycache__/
 build/
 dist/
 
-# Firmware/config dumps extracted via this project's own tooling (probe-flash,
-# dump-flash, dump-setup). Excluded for now, not permanently: the project intent
-# (PLAN.md §8) is to eventually PUBLISH reproducibly-verified official firmware
-# dumps as a public community resource, once that reproducibility is confirmed —
-# this exclusion should be revisited deliberately at that point, not left as a
-# default. See dumps/README.md.
-dumps/*.bin
-dumps/*.hex
-
+# dumps/*.bin and *.hex (this project's own extracted config/firmware backups) are
+# deliberately NOT excluded here (whitelisted 2026-09-07, see AGENTS.md's Publishing
+# Gate) — they aren't vendor-released binaries, just data this project extracted
+# from the user's own owned hardware. See dumps/README.md.
 
 # Local secrets/state
 .blheli32proxy/

@@ -17,6 +17,8 @@ Subcommands:
 dump-config/probe-flash/dump-info-page/dump-firmware all take --motor-index when --port is a flight
 controller's USB port rather than a dedicated ESC adapter — see
 docs/knowledge/protocol-reference.md for the confirmed 4-way-if protocol this drives.
+dump-config defaults to dumping every ESC the FC reports when --motor-index is omitted (pass
+--motor-index N to dump just one, or --direct for a standalone ESC not behind a flight controller).
 """
 
 from __future__ import annotations
@@ -213,6 +215,26 @@ def _print_defaults_comparison(plaintext: bytes, candidate_path: str, key) -> No
         print(f"  {name}: real={real_value} default={default_value} ({flag})")
 
 
+def _save_raw_setup_backup(ciphertext: bytes, raw_dir: str | None, esc_index: int) -> None:
+    """Save one ESC's exact 256-byte Setup-block ciphertext to <raw_dir>/esc<N>-setup-<timestamp>.bin
+    — a byte-exact backup usable for a full restore (unlike --out's decoded-fields-only file, which
+    only covers the 13 confirmed fields). No-op if raw_dir is None. Refuses to write into
+    $BLHELI32PROXY_ARCHIVE_DIR/$BLHELI32PROXY_APP_DIR, same guard as dump-info-page/dump-firmware."""
+    if raw_dir is None:
+        return
+    from datetime import datetime
+
+    path = Path(raw_dir).expanduser().resolve()
+    guard_result = _dump_output_archive_guard(path / "placeholder.bin")
+    if guard_result is not None:
+        raise SystemExit(guard_result)
+    path.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_file = path / f"esc{esc_index}-setup-{timestamp}.bin"
+    out_file.write_bytes(ciphertext)
+    print(f"Saved raw Setup-block backup: {out_file}")
+
+
 def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Read an ESC's Setup block and print a best-effort decrypt. Not part of
     the normal flashing workflow (the real BLHeliSuite32xl app handles that)
@@ -221,33 +243,45 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     from .protocol.transport import SerialTransport
 
     key = xtea.TEST_FIRMWARE_KEY if args.test_firmware else xtea.PRODUCTION_KEY
+
+    if args.direct and args.motor_index is not None:
+        print("--direct and --motor-index are mutually exclusive.", file=sys.stderr)
+        return 1
+
     transport = SerialTransport(args.port)
 
+    if args.direct:
+        from .protocol.client import BLHeliClient
+
+        client = BLHeliClient(transport)
+        try:
+            client.prime_connection()
+            reply = client.connect()
+            print(f"Connected: prefix={reply.prefix!r} device_type={reply.device_type!r}")
+            block = client.read_setup_block()
+            plaintext = xtea.decrypt_setup_block(block.ciphertext, key=key)
+            print(f"Decrypted {len(plaintext)} bytes:")
+            print(plaintext.hex())
+            _print_confirmed_fields(plaintext, esc_index=0, out_path=args.out)
+            _save_raw_setup_backup(block.ciphertext, args.raw_dir, esc_index=0)
+            if args.show_defaults:
+                _print_defaults_comparison(plaintext, args.show_defaults, key)
+        finally:
+            client.disconnect()
+            transport.close()
+        return 0
+
     if args.motor_index is not None:
-        return _dump_config_via_fourwayif(transport, args.motor_index, key, args.out, args.show_defaults)
+        return _dump_config_via_fourwayif(
+            transport, args.motor_index, key, args.out, args.show_defaults, args.raw_dir
+        )
 
-    from .protocol.client import BLHeliClient
-
-    client = BLHeliClient(transport)
-    try:
-        client.prime_connection()
-        reply = client.connect()
-        print(f"Connected: prefix={reply.prefix!r} device_type={reply.device_type!r}")
-        block = client.read_setup_block()
-        plaintext = xtea.decrypt_setup_block(block.ciphertext, key=key)
-        print(f"Decrypted {len(plaintext)} bytes:")
-        print(plaintext.hex())
-        _print_confirmed_fields(plaintext, esc_index=0, out_path=args.out)
-        if args.show_defaults:
-            _print_defaults_comparison(plaintext, args.show_defaults, key)
-    finally:
-        client.disconnect()
-        transport.close()
-    return 0
+    return _dump_config_all_via_fourwayif(transport, key, args.out, args.show_defaults, args.raw_dir)
 
 
 def _dump_config_via_fourwayif(
-    transport, motor_index: int, key, out_path: str | None, show_defaults: str | None = None
+    transport, motor_index: int, key, out_path: str | None, show_defaults: str | None = None,
+    raw_dir: str | None = None,
 ) -> int:
     """FC-passthrough path (--motor-index): enter the real 4-way-if protocol
     BLHeliSuite32xl/AM32-Configurator actually use, live-verified end-to-end
@@ -267,8 +301,43 @@ def _dump_config_via_fourwayif(
         print(f"Decrypted {len(plaintext)} bytes:")
         print(plaintext.hex())
         _print_confirmed_fields(plaintext, esc_index=motor_index, out_path=out_path)
+        _save_raw_setup_backup(ciphertext, raw_dir, esc_index=motor_index)
         if show_defaults:
             _print_defaults_comparison(plaintext, show_defaults, key)
+    finally:
+        try:
+            fw.exit_interface(transport)
+        except fw.FourWayError as exc:
+            print(f"Warning: could not cleanly exit 4-way-if: {exc}", file=sys.stderr)
+        transport.close()
+    return 0
+
+
+def _dump_config_all_via_fourwayif(
+    transport, key, out_path: str | None, show_defaults: str | None = None, raw_dir: str | None = None
+) -> int:
+    """FC-passthrough path, default when --motor-index is omitted (and --direct
+    isn't given): enters 4-way-if once, then dumps every ESC the FC reports —
+    matches how the real BLHeliSuite32xl app's own "Checking Multiple ESC" scan
+    works (one passthrough entry, one connect_esc() per channel in sequence),
+    not a separate passthrough session per ESC."""
+    from .cipher import xtea
+    from .protocol import fourwayif as fw
+
+    try:
+        esc_count = fw.enter_4way_if(transport)
+        print(f"Entered 4-way-if, FC reports {esc_count} ESC(s)")
+        for motor_index in range(esc_count):
+            signature = fw.connect_esc(transport, motor_index)
+            print(f"\nESC {motor_index}: device signature {signature.hex()}")
+            ciphertext = fw.read_flash(transport, addr=0x7C00, length=256)
+            plaintext = xtea.decrypt_setup_block(ciphertext, key=key)
+            print(f"Decrypted {len(plaintext)} bytes:")
+            print(plaintext.hex())
+            _print_confirmed_fields(plaintext, esc_index=motor_index, out_path=out_path)
+            _save_raw_setup_backup(ciphertext, raw_dir, esc_index=motor_index)
+            if show_defaults:
+                _print_defaults_comparison(plaintext, show_defaults, key)
     finally:
         try:
             fw.exit_interface(transport)
@@ -731,7 +800,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--motor-index",
         type=int,
         default=None,
-        help=MOTOR_INDEX_HELP,
+        help=MOTOR_INDEX_HELP + " — omit to dump every ESC the FC reports (the default)",
+    )
+    p_dumpcfg.add_argument(
+        "--direct",
+        action="store_true",
+        help="skip FC-passthrough auto-discovery; connect directly as a single standalone "
+        "device (for an ESC wired to a dedicated adapter, not through a flight controller) "
+        "— mutually exclusive with --motor-index",
     )
     p_dumpcfg.add_argument(
         "--show-defaults",
@@ -747,6 +823,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="append this ESC's confirmed fields as an [ESCn] section to a partial-backup "
         "file (creates it with a not-a-real-.ixi warning header if new) — confirmed fields "
         "only, never a complete or loadable .ixi",
+    )
+    p_dumpcfg.add_argument(
+        "--raw-dir",
+        default=None,
+        help="also save each dumped ESC's exact 256-byte Setup-block ciphertext to "
+        "<raw-dir>/esc<N>-setup-<timestamp>.bin — a byte-exact backup usable for a full "
+        "restore, unlike --out's decoded-fields-only file (see dumps/README.md)",
     )
     p_dumpcfg.set_defaults(func=_cmd_dump_config)
 

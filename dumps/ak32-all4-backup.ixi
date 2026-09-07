@@ -1,0 +1,66 @@
+; Partial backup written by blheli32proxy — confirmed fields only (see
+; protocol/setup_fields.py). NOT a complete .ixi: missing header fields
+; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~26 undecoded Eep_Pgm_*/
+; Eep_Hw_* fields. Do not load this into BLHeliSuite32xl or any other
+; tool expecting a real .ixi — it will misinterpret the missing fields.
+
+[ESC1]
+Eep_Pgm_Direction=1
+Eep_Pgm_Rampup_Pwr=50
+Eep_Pgm_Pwm_Freq=48
+Eep_Pgm_Comm_Timing=0
+Eep_Pgm_Demag_Comp=2
+Eep_Pgm_Ppm_Min_Throttle=1014
+Eep_Pgm_Ppm_Center_Throttle=1500
+Eep_Pgm_Ppm_Max_Throttle=1985
+Eep_Pgm_Enable_Throttle_Cal=1
+Eep_Pgm_Temp_Prot_Enable=140
+Eep_Pgm_Beep_Strength=40
+Eep_Pgm_Beacon_Strength=70
+Eep_Pgm_Beacon_Delay=600
+
+[ESC2]
+Eep_Pgm_Direction=2
+Eep_Pgm_Rampup_Pwr=50
+Eep_Pgm_Pwm_Freq=48
+Eep_Pgm_Comm_Timing=0
+Eep_Pgm_Demag_Comp=2
+Eep_Pgm_Ppm_Min_Throttle=1014
+Eep_Pgm_Ppm_Center_Throttle=1500
+Eep_Pgm_Ppm_Max_Throttle=1985
+Eep_Pgm_Enable_Throttle_Cal=1
+Eep_Pgm_Temp_Prot_Enable=140
+Eep_Pgm_Beep_Strength=40
+Eep_Pgm_Beacon_Strength=70
+Eep_Pgm_Beacon_Delay=600
+
+[ESC3]
+Eep_Pgm_Direction=2
+Eep_Pgm_Rampup_Pwr=50
+Eep_Pgm_Pwm_Freq=48
+Eep_Pgm_Comm_Timing=0
+Eep_Pgm_Demag_Comp=2
+Eep_Pgm_Ppm_Min_Throttle=1014
+Eep_Pgm_Ppm_Center_Throttle=1500
+Eep_Pgm_Ppm_Max_Throttle=1985
+Eep_Pgm_Enable_Throttle_Cal=1
+Eep_Pgm_Temp_Prot_Enable=140
+Eep_Pgm_Beep_Strength=40
+Eep_Pgm_Beacon_Strength=70
+Eep_Pgm_Beacon_Delay=600
+
+[ESC4]
+Eep_Pgm_Direction=1
+Eep_Pgm_Rampup_Pwr=50
+Eep_Pgm_Pwm_Freq=48
+Eep_Pgm_Comm_Timing=0
+Eep_Pgm_Demag_Comp=2
+Eep_Pgm_Ppm_Min_Throttle=1014
+Eep_Pgm_Ppm_Center_Throttle=1500
+Eep_Pgm_Ppm_Max_Throttle=1985
+Eep_Pgm_Enable_Throttle_Cal=1
+Eep_Pgm_Temp_Prot_Enable=140
+Eep_Pgm_Beep_Strength=40
+Eep_Pgm_Beacon_Strength=70
+Eep_Pgm_Beacon_Delay=600
+

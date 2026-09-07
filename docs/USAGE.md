@@ -93,9 +93,22 @@ blheli32proxy list-test-firmware --dir /path/to/other/firmware/dir
 
 ```
 usage: blheli32proxy dump-config [-h] --port PORT [--test-firmware]
+                                  [--motor-index MOTOR_INDEX] [--direct]
+                                  [--show-defaults CANDIDATE_HEX] [--out OUT]
+                                  [--raw-dir RAW_DIR]
 
-  --port PORT       serial port, e.g. /dev/ttyACM0 or COM3 (required)
-  --test-firmware   use the test-firmware XTEA key instead of the production one
+  --port PORT        serial port, e.g. /dev/ttyACM0 or COM3 (required)
+  --test-firmware    use the test-firmware XTEA key instead of the production one
+  --motor-index N    dump just this one ESC via FC-passthrough (omit to dump every
+                      ESC the FC reports — the default)
+  --direct           connect directly as a single standalone device instead of via
+                      an FC's 4-way-if passthrough (mutually exclusive with --motor-index)
+  --show-defaults    compare against a candidate firmware .Hex's factory-default Setup block
+  --out OUT          append confirmed fields as an [ESCn] section to a partial-backup file
+                      (decoded fields only, never a complete/loadable .ixi)
+  --raw-dir RAW_DIR  also save each dumped ESC's exact 256-byte ciphertext to
+                      <raw-dir>/esc<N>-setup-<timestamp>.bin — a byte-exact backup
+                      usable for a full restore
 ```
 See [§6](#6-diagnostics-experimental-needs-real-hardware) for what this does and its caveats
 (cipher unverified against real hardware).
@@ -503,11 +516,16 @@ blheli32proxy list-test-firmware --dir /path/to/other/firmware/dir
 
 ## 6. Diagnostics (experimental, needs real hardware)
 
-`blheli32proxy dump-config --port /dev/ttyACM0` (or `COM3` on Windows) connects directly to an ESC
-over serial and attempts to read+decrypt its 256-byte Setup/config block, independent of
-`BLHeliSuite32xl`. This is read-only diagnostic tooling, **not** part of the normal
-flash/activation workflow (see [PLAN.md §4](../PLAN.md#4-architecture-decision)) — the underlying cipher is not verified against real
-hardware (see `IMPLEMENTATION.md`), so treat its output as informational only.
+`blheli32proxy dump-config --port /dev/ttyACM0` (or `COM3` on Windows) reads+decrypts every ESC's
+256-byte Setup/config block, independent of `BLHeliSuite32xl` — through an FC's 4-way-if
+passthrough by default (add `--direct` for a standalone ESC on a dedicated adapter, `--motor-index
+N` for just one channel). This is read-only diagnostic tooling, **not** part of the normal
+flash/activation workflow (see [PLAN.md §4](../PLAN.md#4-architecture-decision)). The cipher and
+13 confirmed fields are verified against real hardware (exact match to official `.ixi` backups
+across multiple ESCs/firmware revisions — see [Hardware
+Findings](knowledge/hardware-findings.md)); fields beyond those 13 remain undecoded, not guessed.
+Pass `--raw-dir dumps` to also save a byte-exact backup of each ESC's Setup block — do this
+routinely, not just before a risky experiment (see `dumps/README.md`).
 
 **To actually flash an ESC, use the real `BLHeliSuite32xl` app, not this tool** — this project
 never implements firmware flashing itself (see [PLAN.md §4](../PLAN.md#4-architecture-decision) and `IMPLEMENTATION.md`'s "Known gap"
@@ -548,9 +566,9 @@ blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
     --out dumps/ak32-32.7-backup.bin
 ```
 
-`dumps/` (project root, see `dumps/README.md`) is the right place for this — it's excluded from
-git via `.gitignore`, so a firmware backup never accidentally ends up in this project's own
-history even once it's published. **This is also the recommended first step before any riskier
+`dumps/` (project root, see `dumps/README.md`) is the right place for this — this project's own
+extractions from your own hardware are fine to commit and publish (see `AGENTS.md`'s Publishing
+Gate), unlike vendor-released binaries. **This is also the recommended first step before any riskier
 experiment** (a new firmware flash, an activation attempt, or the AM32-flashing backlog item in
 `PLAN.md` §7) — have a known-good backup of the currently-flashed firmware before changing anything.
 

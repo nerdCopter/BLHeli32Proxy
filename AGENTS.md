@@ -95,6 +95,49 @@ above, or anywhere referenced from this project — standing instruction, no exc
 
 ---
 
+## Technical Knowledge Standard — solve, don't settle; retain, never purge
+
+The goal of this project's technical work is **comprehensive BLHeli32 knowledge — protocol,
+cipher, Setup-block layout, hardware behavior — general to BLHeli32 across manufacturers, MCU
+families, and firmware versions, not scoped to whatever hardware the current user happens to own.**
+A finding confirmed on one board (AK32, Furling32, whichever) is a data point toward that general
+picture, not the destination. When writing up a finding, default to framing it in general terms
+(what's true of BLHeli32's protocol/cipher/format) and call out explicitly what's hardware-specific
+(MCU-dependent addresses, per-manufacturer layout names) — don't leave a genuinely general finding
+implicitly scoped to "this board" when nothing in the evidence suggests it's board-specific.
+
+**Don't stop at "good enough" or declare something closed/not-pursued-further while a real,
+reasonably-available technique remains untried.** Before writing off a gap as unknown or
+unconfirmed, actively consider: differential/fingerprinting captures (change many things at once
+with distinct values, diff once, correlate — not one slow field at a time), static analysis of the
+compiled app/binaries, cross-referencing every available data source (research blog posts, real
+`.ixi`/`.xlg` captures, multiple hardware units/firmware revisions), and whether a previous session
+stopped short of what was actually achievable. "Not pursued further" is a legitimate outcome only
+after real options are exhausted or explicitly deferred by the user — not a default.
+
+**Never overclaim, and never understate effort to justify giving up early.** Every finding gets
+marked confirmed (empirically verified, how) vs. inferred (reasoned from evidence, not directly
+tested) vs. unconfirmed/guessed — consistently, so a reader can tell which is which. Don't state a
+guess as fact, and don't quietly downgrade "we haven't tried yet" into "not possible."
+
+**Keep `docs/knowledge/` (and confirmed-finding docstrings, e.g. `write_flash()`'s) reflecting
+current valid understanding — never let a real finding go missing through carelessness.** When a
+finding is superseded or wrong, fix it so the doc states what's actually true now; don't leave a
+disproven claim standing as if still valid. What must never happen is a finding *disappearing*
+silently — a rewrite/consolidation pass that drops detail nobody re-derived, or deletes a section
+because it "looks resolved."
+
+**Explicitly record what's known to be false, not just what's true** — a debunked hypothesis, a
+technique that didn't work, an assumption disproven by a real incident. State it plainly as
+confirmed-wrong (not just quietly removed) so a future session doesn't waste time re-trying it or,
+worse, re-acting on it (e.g. `write_flash()`'s docstring now says plainly that writing without
+erasing first can silently corrupt more than the targeted bytes — a future session reading only
+"here's how to write" without that warning could repeat today's incident). Routine superseded
+guesses don't need a permanent monument; hard-won confirmed facts, real incidents, and the wrong
+assumptions that caused them do.
+
+---
+
 ## Scope Notes
 
 - The user's own dev/test machine is Linux-only, but **the codebase itself must be cross-platform**
@@ -129,27 +172,35 @@ above, or anywhere referenced from this project — standing instruction, no exc
    technical reference base (protocol, activation/licensing, Setup-block fields, hardware
    findings) — update the relevant topic file when a new finding is confirmed, don't let it drift
    back into `PLAN.md` as an inline log.
-5. **PUBLISH** — vendor binaries (`dumps/*.bin`/`*.hex`, any other vendor `.Hex`/`.bin` a user's
-   own `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` might contain) are gitignored and
-   never committed or published — a permanent rule, not a
-   case-by-case decision; see this document's own Publishing Gate section. Publishing the
+5. **PUBLISH** — vendor-*released* binaries (test firmware fetched via `scripts/fetch-testcode.sh`,
+   or any other vendor `.Hex`/`.bin` a user's own `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR`
+   might contain — files the vendor itself distributed) are never committed or published — a
+   permanent rule, not a case-by-case decision; see this document's own Publishing Gate section.
+   This does **not** cover `dumps/*.bin`/`*.hex` (this project's own extractions from the user's own
+   owned hardware, whitelisted 2026-09-07 — see the Publishing Gate section). Publishing the
    tool/codebase itself (this project's own code, docs, research) still needs the repository
    owner's explicit approval before any push, PR, or visibility change. Any future `/docs` pass or
    repo cleanup must preserve this distinction, not prune it as stale.
 
 ---
 
-## Publishing Gate — Hard Rule (vendor binaries, permanent, no exceptions)
+## Publishing Gate — Hard Rule (vendor-released binaries, permanent, no exceptions)
 
-**Never commit or publish copyrighted vendor binaries** — `dumps/*.bin`/`*.hex` (official BLHeli32
-firmware extracted from hardware), or any vendor `.Hex`/`.bin` in a user's own
+**Never commit or publish a binary the vendor itself released** — test firmware fetched via
+`scripts/fetch-testcode.sh`, or any other vendor `.Hex`/`.bin` in a user's own
 `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` (official test firmware, see
 `docs/USAGE.md` §1b) — anywhere externally reachable (a pushed commit, an uploaded file, or any
-equivalent action). This is a **permanent rule, not a case-by-case decision**: `.gitignore` already
-excludes these paths, and no approval process changes that. Each user fetches their own copy of the
-vendor's test firmware directly from BLHeli's official upstream repository (`docs/USAGE.md` §1b) —
-this project never needs to redistribute the binaries itself, so there is no publish decision to
-make about them.
+equivalent action). This is a **permanent rule, not a case-by-case decision**. Each user fetches
+their own copy of the vendor's test firmware directly from BLHeli's official upstream repository
+(`docs/USAGE.md` §1b) — this project never needs to redistribute the binaries itself, so there is
+no publish decision to make about them.
+
+**This does NOT cover `dumps/*.bin`/`*.hex`** (whitelisted 2026-09-07, not gitignored) — data this
+project's own tooling extracts from a user's own owned hardware (Setup-block config backups, and
+any application-firmware dump if one is ever achieved). This is the user's own property being
+read out, not a copy of a file the vendor distributed — the same category the `.ixi`/`.xlg`
+hardware-evidence files under `docs/knowledge/` already fall into, just a different file format.
+These may be published if the user chooses, same approval process as any other push.
 
 This does **not** restrict the tool/codebase itself — this project's own original Python code,
 docs, research/translations, and the small `.ixi`/`.xlg` hardware-evidence files under
@@ -158,6 +209,6 @@ publish. Publishing those still needs the repository owner's explicit approval b
 PR, or visibility change — standard practice for any action affecting shared/remote state, not a
 project-specific extra gate.
 
-This project deliberately sidesteps the question of whether BLHeli's own binaries could ever be
-legally redistributed, rather than resolving it — since it never attempts to. Revisit only if
-something materially changes (e.g. a takedown notice, or a change in who holds BLHeli's IP).
+This project deliberately sidesteps the question of whether BLHeli's own *released* binaries could
+ever be legally redistributed, rather than resolving it — since it never attempts to. Revisit only
+if something materially changes (e.g. a takedown notice, or a change in who holds BLHeli's IP).

@@ -41,9 +41,18 @@ EXPECTED_ESC0 = {
     "Eep_Pgm_Ppm_Max_Throttle": 1985,
     "Eep_Pgm_Enable_Throttle_Cal": 1,
     "Eep_Pgm_Temp_Prot_Enable": 140,
+    "Eep_Pgm_Volt_Prot": 0,
+    "Eep_Pgm_Enable_Power_Prot": 1,
+    "Eep_Pgm_Brake_On_Stop": 0,
     "Eep_Pgm_Beep_Strength": 40,
     "Eep_Pgm_Beacon_Strength": 70,
     "Eep_Pgm_Beacon_Delay": 600,
+    "Eep_Pgm_Max_Acceleration": 0,
+    "Eep_Pgm_Nondamped_Mode": 0,
+    "Eep_Note_Config": 80,
+    "Eep_Pgm_Sine_Mode": 0,
+    "Eep_Pgm_Auto_Tlm_Mode": 0,
+    "Eep_Pgm_Stall_Prot": 1,
 }
 
 
@@ -83,9 +92,18 @@ Eep_Pgm_Ppm_Center_Throttle=1500
 Eep_Pgm_Ppm_Max_Throttle=1985
 Eep_Pgm_Enable_Throttle_Cal=1
 Eep_Pgm_Temp_Prot_Enable=140
+Eep_Pgm_Volt_Prot=0
+Eep_Pgm_Enable_Power_Prot=1
+Eep_Pgm_Brake_On_Stop=0
 Eep_Pgm_Beep_Strength=40
 Eep_Pgm_Beacon_Strength=70
 Eep_Pgm_Beacon_Delay=600
+Eep_Pgm_Max_Acceleration=0
+Eep_Pgm_Nondamped_Mode=0
+Eep_Note_Config=80
+Eep_Pgm_Sine_Mode=0
+Eep_Pgm_Auto_Tlm_Mode=0
+Eep_Pgm_Stall_Prot=1
 """
 
 

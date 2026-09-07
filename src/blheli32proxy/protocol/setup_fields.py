@@ -1,24 +1,53 @@
 """Named-field decoding of the 192-byte decrypted Setup block plaintext.
 
-Only covers fields whose byte offset was empirically confirmed (2026-09-04)
-by cross-referencing this project's own decrypted plaintext, read live from
-all 4 ESCs on a real Aikon AK32 4-in-1, against a real backup file produced
-by the official BLHeliSuite32xl app for the same hardware. Confirmation
-method: `Eep_Pgm_Direction` is the only byte that differs across the 4 ESCs
-(values 1,2,2,1) and it matches the real app's per-ESC direction settings
-exactly; the remaining fields were placed by matching literal integer values
-(e.g. byte 0x8c = 140 = the real app's `Eep_Pgm_Temp_Prot_Enable`) at their
-natural sequential position following Direction.
+Only covers fields whose byte offset was empirically confirmed by
+cross-referencing this project's own decrypted plaintext against a real
+backup file (and, for the 2026-09-07 batch, a real differential capture —
+see below) produced by the official BLHeliSuite32xl app for the same
+hardware (Aikon AK32 4-in-1, firmware 32.7).
 
-BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms these field
+**Original 13 fields (2026-09-04)**: `Eep_Pgm_Direction` is the only byte
+that differs across the 4 ESCs (values 1,2,2,1) and it matches the real
+app's per-ESC direction settings exactly; the remaining 12 were placed by
+matching literal integer values (e.g. byte 0x8c = 140 = the real app's
+`Eep_Pgm_Temp_Prot_Enable`) at their natural sequential position.
+
+**8 more fields (2026-09-07)**, via differential capture: set every
+changeable field to a distinct value in the real app at once, Write Setup,
+diff the raw plaintext against a pre-change backup byte-by-byte, match each
+changed byte against the `.ixi`'s new field values. Where multiple fields
+changed simultaneously and collided (offsets 26/29/30/31 all flipping
+0<->1 on the same pass), resolved with follow-up single-field toggles until
+each offset was isolated to exactly one field — see
+docs/knowledge/setup-block-fields.md for the full method and evidence.
+`Eep_Pgm_Volt_Prot` and `Eep_Pgm_Max_Acceleration` store the raw on-flash
+byte here (consistent with every other field in this table) — the app UI
+shows them divided by 10 (byte 27 -> "2.70 V", byte 58 -> "5.8% per ms");
+that division is an observed correlation, not confirmed to be the real
+`.ixi` text file's own on-disk representation, so it is not applied here.
+
+**1 more field (2026-09-07, same session)**: `Eep_Note_Config` (offset 28,
+single byte, packed as `Length<<4 | Interval` — byte 0x50 decoded to the
+real app's "Length 05 Interval 00", byte 0x37 to "Length 3 Interval 7";
+matches the real `.ixi`'s own `Eep_Note_Config=80` literal value for the
+first case, confirming this raw-byte representation is exactly the `.ixi`
+file's own on-disk format, not just this module's convention).
+`Eep_Note_Array` (the actual melody note sequence) remains undecoded —
+substantially more complex, a variable-length sequence, not attempted.
+
+BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms some field
 *names* but NOT these offsets or widths — BLHeli_32 (closed-source) widened
 several fields (e.g. throttle values: 1 scaled byte in BLHeli_S vs. 2 raw
 bytes here) and reordered others. No public source exists for BLHeli_32-only
-fields (Eep_Note_Array, all Eep_Hw_* capability flags, Sine_Mode,
-Auto_Tlm_Mode, Stall_Prot, ESC_Layout, ESC_Mode) — do not guess offsets for
-these; leave them undecoded rather than emit a wrong value. In particular,
-never use this module's output to drive a write-back/restore path — it is
-read-only reporting, not a validated round-trip format.
+fields — remaining undecoded: `Eep_Note_Array` (melody note sequence, byte
+layout not attempted), all `Eep_Hw_*` capability flags (expected
+read-only/immutable, not user-settable so not reachable via this method),
+`Eep_Name`, `Eep_ESC_Layout`, `Eep_ESC_Mode`, `Eep_FW_*_Revision`,
+`Eep_Layout_Revision` (identity/version fields, also immutable). Do not
+guess offsets for these; leave them undecoded rather than emit a wrong
+value. In particular, never use this module's output to drive a
+write-back/restore path — it is read-only reporting, not a validated
+round-trip format.
 """
 
 from __future__ import annotations
@@ -35,9 +64,18 @@ CONFIRMED_FIELDS: dict[str, tuple[int, int]] = {
     "Eep_Pgm_Ppm_Max_Throttle": (12, 2),
     "Eep_Pgm_Enable_Throttle_Cal": (14, 1),
     "Eep_Pgm_Temp_Prot_Enable": (15, 1),
+    "Eep_Pgm_Volt_Prot": (16, 1),
+    "Eep_Pgm_Enable_Power_Prot": (18, 1),
+    "Eep_Pgm_Brake_On_Stop": (19, 1),
     "Eep_Pgm_Beep_Strength": (20, 1),
     "Eep_Pgm_Beacon_Strength": (21, 1),
     "Eep_Pgm_Beacon_Delay": (22, 2),
+    "Eep_Pgm_Max_Acceleration": (25, 1),
+    "Eep_Pgm_Nondamped_Mode": (26, 1),
+    "Eep_Note_Config": (28, 1),
+    "Eep_Pgm_Sine_Mode": (29, 1),
+    "Eep_Pgm_Auto_Tlm_Mode": (30, 1),
+    "Eep_Pgm_Stall_Prot": (31, 1),
 }
 
 
@@ -82,7 +120,7 @@ def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
 IXI_PARTIAL_BACKUP_WARNING = (
     "; Partial backup written by blheli32proxy — confirmed fields only (see\n"
     "; protocol/setup_fields.py). NOT a complete .ixi: missing header fields\n"
-    "; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~26 undecoded Eep_Pgm_*/\n"
+    "; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~16 undecoded Eep_Note_Array/\n"
     "; Eep_Hw_* fields. Do not load this into BLHeliSuite32xl or any other\n"
     "; tool expecting a real .ixi — it will misinterpret the missing fields.\n"
 )

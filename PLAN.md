@@ -185,10 +185,17 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
 
 This project's own code/docs/research can be published following the repository owner's normal
 approval before any push, PR, or visibility change — no extra restriction beyond that.
-**Copyrighted vendor binaries are different and permanent**: see `AGENTS.md`'s Publishing Gate —
-`dumps/*.bin`/`*.hex`, and any other vendor firmware in a user's own app/archive folder, are
-gitignored and never committed or published. Each user fetches their own copy of the vendor's test
-firmware directly from BLHeli's official upstream repository (`docs/USAGE.md` §1b) — this project
-never needs to redistribute it, so there is no publish decision to make about it.
+**Vendor-released binaries are different and permanent**: see `AGENTS.md`'s Publishing Gate — any
+vendor-distributed firmware in a user's own app/archive folder (test firmware fetched via
+`scripts/fetch-testcode.sh`, or bundled with the vendor app) is never committed or published. Each
+user fetches their own copy of the vendor's test firmware directly from BLHeli's official upstream
+repository (`docs/USAGE.md` §1b) — this project never needs to redistribute it, so there is no
+publish decision to make about it.
+
+**`dumps/*.bin`/`*.hex` are NOT covered by that restriction** (whitelisted 2026-09-07) — they're
+this project's own extractions from a user's own owned hardware (Setup-block backups, and any
+application-firmware dump if one is ever achieved), not a copy of a vendor-distributed file. Same
+category as the `.ixi`/`.xlg` files already published under `docs/knowledge/`. Fine to commit and
+publish, same approval process as any other push.
 
 A `LICENSE` file is still needed before any public release and has not been added yet.

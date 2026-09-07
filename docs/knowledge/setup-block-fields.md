@@ -15,48 +15,118 @@ for reference), confirmed taken with all 4 ESC channels genuinely wired on the r
 against that file byte-by-byte is the method behind every confirmed offset below — not guessing,
 not a public spec.
 
-## Method
+## Method — original 13 fields (2026-09-04)
 
 `Eep_Pgm_Direction` is the *only* byte that differs across the 4 ESCs (offset 3, values `1,2,2,1`),
 exactly matching the real per-motor direction settings in the `.ixi`. Extending from there by
 matching literal integer values (e.g. byte `0x8c` = 140 = the real app's `Eep_Pgm_Temp_Prot_Enable`)
 at their natural sequential position confirmed 13 fields total.
 
-## Confirmed fields (`protocol/setup_fields.py`)
+## Method — 8 more fields via differential capture (2026-09-07)
 
-| Offset | Width | Field | Confirmed value (this hardware) |
-|---|---|---|---|
-| 3 | 1 | `Eep_Pgm_Direction` | 1 or 2, varies per ESC |
-| 4 | 1 | `Eep_Pgm_Rampup_Pwr` | 50 |
-| 5 | 1 | `Eep_Pgm_Pwm_Freq` | 48 |
-| 6 | 1 | `Eep_Pgm_Comm_Timing` | 0 |
-| 7 | 1 | `Eep_Pgm_Demag_Comp` | 2 |
-| 8–9 | 2 (LE) | `Eep_Pgm_Ppm_Min_Throttle` | 1014 |
-| 10–11 | 2 (LE) | `Eep_Pgm_Ppm_Center_Throttle` | 1500 |
-| 12–13 | 2 (LE) | `Eep_Pgm_Ppm_Max_Throttle` | 1985 |
-| 14 | 1 | `Eep_Pgm_Enable_Throttle_Cal` | 1 |
-| 15 | 1 | `Eep_Pgm_Temp_Prot_Enable` | 140 |
-| 20 | 1 | `Eep_Pgm_Beep_Strength` | 40 |
-| 21 | 1 | `Eep_Pgm_Beacon_Strength` | 70 |
-| 22–23 | 2 (LE) | `Eep_Pgm_Beacon_Delay` | 600 |
+**General technique, reusable for any BLHeli32 hardware/firmware, not specific to this board**:
+change every changeable setting to a distinct value in the real app at once (not one at a time —
+far faster), Write Setup, then diff the raw Setup-block plaintext against a pre-change backup
+byte-by-byte. Match each changed byte's new value against the `.ixi`'s new field values. This
+resolved 7 of 8 new fields cleanly in one pass:
 
-Live-verified: `dump-config --motor-index 0` against the real hardware prints all 13 confirmed
-fields, every value matching the real `.ixi`'s `[ESC1]` section exactly.
+- `Eep_Pgm_Volt_Prot`, `Eep_Pgm_Enable_Power_Prot`, `Eep_Pgm_Brake_On_Stop`,
+  `Eep_Pgm_Max_Acceleration` — each a unique changed value, unambiguous match.
+
+**Where multiple boolean-like fields changed simultaneously and collided** (offsets 26/29/30/31 all
+flipped `0`→`1` in the same pass — `Nondamped_Mode`, `Sine_Mode`, `Auto_Tlm_Mode`, `Stall_Prot`),
+resolved with targeted follow-up single-field toggles: revert one field, re-diff against the
+previous capture (not the original baseline) — whichever single offset changes is that field. Two
+follow-up passes (revert `Nondamped_Mode`+`Stall_Prot` together but to *different* value shapes
+— one flips a boolean back, the other lacked a third state so also just flipped — then revert
+`Sine_Mode` alone) fully resolved all four. General lesson for future collisions: prefer giving
+colliding candidates genuinely distinct target values in the first pass (not just "on") so a single
+diff disambiguates without needing follow-ups at all — plan the distinct-value set with this in
+mind before writing.
+
+`Eep_Pgm_Volt_Prot` and `Eep_Pgm_Max_Acceleration` store the **raw on-flash byte** in this table
+(27, 58) — the app UI divides by 10 for display ("2.70 V", "5.8% per ms"). That division is an
+observed correlation (multiple values checked, consistent), not confirmed against the real `.ixi`
+text file's own on-disk representation (never captured with a non-default value) — flagged as
+inferred, not re-verified as literally what a `.ixi` file would contain on disk.
+
+`Eep_Pgm_Stall_Prot` on this firmware (AK32 32.7) has only 2 UI states (Normal/Off encoded as 1/0)
+— other hardware/firmware may expose more states at this same offset; re-confirm per-firmware
+before trusting a wider enum range here.
+
+**1 more field, same session**: `Eep_Note_Config` (offset 28) — changing just "Music Note Config"'s
+Length/Interval numbers (not the full note sequence) changed exactly one byte: `0x50`→`0x37`.
+Decoded as `Length<<4 | Interval` (0x50 = Length 5, Interval 0; 0x37 = Length 3, Interval 7) —
+matches the app's display exactly, and matches the real `.ixi`'s own literal `Eep_Note_Config=80`
+value (80 = 0x50) for the original state. This is strong confirmation that the raw on-flash byte
+*is* the `.ixi` file's own on-disk representation for at least this field, not just a convenience
+this module invented.
+
+## Confirmed fields (`protocol/setup_fields.py`) — 22 of ~38 total `.ixi` fields
+
+| Offset | Width | Field | Confirmed value (original baseline) | Confirmed 2026-09-07 |
+|---|---|---|---|---|
+| 3 | 1 | `Eep_Pgm_Direction` | 1 or 2, varies per ESC | |
+| 4 | 1 | `Eep_Pgm_Rampup_Pwr` | 50 | |
+| 5 | 1 | `Eep_Pgm_Pwm_Freq` | 48 | |
+| 6 | 1 | `Eep_Pgm_Comm_Timing` | 0 | |
+| 7 | 1 | `Eep_Pgm_Demag_Comp` | 2 | |
+| 8–9 | 2 (LE) | `Eep_Pgm_Ppm_Min_Throttle` | 1014 | |
+| 10–11 | 2 (LE) | `Eep_Pgm_Ppm_Center_Throttle` | 1500 | |
+| 12–13 | 2 (LE) | `Eep_Pgm_Ppm_Max_Throttle` | 1985 | |
+| 14 | 1 | `Eep_Pgm_Enable_Throttle_Cal` | 1 | |
+| 15 | 1 | `Eep_Pgm_Temp_Prot_Enable` | 140 | |
+| 16 | 1 | `Eep_Pgm_Volt_Prot` | 0 | ✅ raw byte, UI shows ÷10 volts |
+| 18 | 1 | `Eep_Pgm_Enable_Power_Prot` | 1 | ✅ |
+| 19 | 1 | `Eep_Pgm_Brake_On_Stop` | 0 | ✅ raw percent |
+| 20 | 1 | `Eep_Pgm_Beep_Strength` | 40 | |
+| 21 | 1 | `Eep_Pgm_Beacon_Strength` | 70 | |
+| 22–23 | 2 (LE) | `Eep_Pgm_Beacon_Delay` | 600 | |
+| 25 | 1 | `Eep_Pgm_Max_Acceleration` | 0 | ✅ raw byte, UI shows ÷10 %/ms |
+| 26 | 1 | `Eep_Pgm_Nondamped_Mode` | 0 | ✅ |
+| 28 | 1 | `Eep_Note_Config` | 80 | ✅ packed `Length<<4\|Interval` |
+| 29 | 1 | `Eep_Pgm_Sine_Mode` | 0 | ✅ |
+| 30 | 1 | `Eep_Pgm_Auto_Tlm_Mode` | 0 | ✅ |
+| 31 | 1 | `Eep_Pgm_Stall_Prot` | 1 | ✅ 2 states on this firmware |
+
+Offsets 17, 24, 27 remain unconfirmed gaps within this range (unchanged across every capture so
+far — either padding, or a field not reachable through the settings changed this session; every
+other visible ESC Setup tab control has now been mapped, so these are likely padding).
+
+Live-verified: `dump-config` (all-ESC default, or `--motor-index N`) against the real hardware
+prints all 22 confirmed fields, every value matching the real `.ixi`'s section exactly.
+
+**Cross-ESC validation (2026-09-07)**: dumped all 4 ESCs after the differential-capture session
+above and compared every confirmed field across all 4 independent physical chips. All 22 fields
+decoded to sensible, consistent values on every chip — `Eep_Pgm_Direction` varied as expected
+(`3,2,2,1`), every other field matched exactly across all 4 *except* `Eep_Note_Config` (ESC0=55,
+ESC1-3=80), which correctly isolates to the one deliberate single-ESC change made that session
+("ESC 1 music set... only"). This is independent confirmation the offset map is a real hardware
+fact, not a coincidental match on one specific capture.
 
 ## What's NOT decoded, and why
 
 Research into BLHeli_S (the open-source predecessor, `bitdump/BLHeli`, `BLHeli_S.asm`) confirmed
 matching field *names* but **not** offsets or widths — BLHeli_32 widened several fields (e.g.
 throttle values: 1 scaled byte in BLHeli_S vs. 2 raw bytes here) and reordered others. **No public
-source exists** for BLHeli_32-only fields, since BLHeli_32 is closed-source:
+source exists** for BLHeli_32-only fields, since BLHeli_32 is closed-source. Remaining, after the
+2026-09-07 differential-capture pass resolved 9 of the fields previously listed here:
 
-- `Eep_Note_Array`, `Eep_Note_Config`
+- `Eep_Note_Array` — the actual melody note sequence (a separate field from `Eep_Note_Config`,
+  confirmed above at offset 28), likely a substantially different byte layout (variable-length
+  sequence); not attempted via the differential method above.
 - All `Eep_Hw_*` capability flags (`Voltage_Sense_Capable`, `Current_Sense_Capable`,
-  `LED_Capable_0..3`, `Pwm_Freq_Min/Max`)
-- `Eep_Pgm_Sine_Mode`, `Eep_Pgm_Auto_Tlm_Mode`, `Eep_Pgm_Stall_Prot`
-- `Eep_ESC_Layout`, `Eep_ESC_Mode`, `Eep_Nondamped_Capable`, `Eep_Pgm_Nondamped_Mode`,
-  `Eep_Pgm_Max_Acceleration`, `Eep_Pgm_Brake_On_Stop`, `Eep_Pgm_Enable_Power_Prot`,
-  `Eep_Pgm_Volt_Prot`
+  `LED_Capable_0..3`, `Pwm_Freq_Min/Max`), `Eep_Nondamped_Capable` — expected read-only hardware
+  descriptors, not reachable via a settings-change differential capture (nothing to toggle in the
+  app for these). Would need a different technique (e.g. comparing across boards with genuinely
+  different hardware capabilities) to ever localize.
+- `Eep_ESC_Layout`, `Eep_ESC_Mode`, `Eep_Name`, `Eep_FW_Main_Revision`, `Eep_FW_Sub_Revision`,
+  `Eep_Layout_Revision` — identity/version fields, also not user-changeable via settings, so not
+  reachable via this method either (though the layout/CPU strings ARE separately recoverable via
+  `extract_identity_strings()`'s delimiter search, not a fixed offset).
+
+Offsets 17, 24, 27 within the already-explored range are also still unconfirmed — see the
+confirmed-fields table above.
 
 Many of these are 0/255 flag-like values with no way to disambiguate their offset by value-matching
 alone (too many candidate positions look identical against a field of repeated 0x00/0xFF bytes).
@@ -106,10 +176,17 @@ reinforces the existing safety note below, not a new restriction.
 
 ## Safety note — read this before extending this module
 
-The raw byte-exact ciphertext/plaintext dump (already working, `fourwayif.read_flash()`) remains
-the actual restore-safe backup mechanism regardless of field-decode completeness — it can't
-misinterpret anything since it's read back byte-for-byte, not reconstructed from named fields.
-**This module's output must never drive a write-back/restore path** until/unless the remaining
-fields are properly confirmed (e.g. via a deliberate differential test: change one real setting via
-BLHeliSuite32xl, re-read, see which byte changed). It exists for read-only reporting and human
-comparison against a real `.ixi`, nothing more.
+The raw byte-exact ciphertext/plaintext dump (already working, `fourwayif.read_flash()`,
+`dump-config --raw-dir`) remains the actual restore-safe backup mechanism regardless of
+field-decode completeness — it can't misinterpret anything since it's read back byte-for-byte, not
+reconstructed from named fields. **This module's output must still never drive a write-back/restore
+path** — 22 of ~38 fields confirmed as of 2026-09-07 is real progress (the differential-capture
+method above works and is reusable), but 16 remain unconfirmed. Reconstructing a full plaintext
+from only the confirmed fields would still leave those unknown bytes as guesses (zero-fill or
+whatever a template happens to contain) — exactly the kind of partial-write gap that caused real
+data loss in the write-test incident (see [Hardware
+Findings](hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07)),
+just via reconstruction gaps instead of an erase side effect. This module exists for read-only
+reporting and human comparison against a real `.ixi`; a real restore should always start from a
+genuine raw backup of that exact ESC, not a field-by-field rebuild — until the full 38 fields are
+confirmed, if ever.
