@@ -136,6 +136,22 @@ erasing first can silently corrupt more than the targeted bytes — a future ses
 guesses don't need a permanent monument; hard-won confirmed facts, real incidents, and the wrong
 assumptions that caused them do.
 
+**Never assume a Setup-block byte-offset map validated on one firmware/hardware combination applies
+unchanged to a different one.** Confirmed real, silent differences exist even among fields that
+mostly line up: `Eep_Pgm_Pwm_Freq` (AK32/32.7) is the same physical byte as
+`Eep_Pgm_Pwm_Frequency_Lo` on Furling32/32.9.5 but means something different (no `_Hi` companion
+exists on 32.7); `Eep_Pgm_Curr_Prot` looked like an unused placeholder on AK32 (no current-sense
+hardware) and turned out to be a live, actively-written field on Furling32. Any write-capable
+script or tool (e.g. a repair/restore that copies or reconstructs Setup-block bytes) must be scoped
+to the exact firmware/hardware it was validated against — check the connected ESC's identity
+(`extract_identity_strings()`, `Eep_FW_Main_Revision`/`Eep_FW_Sub_Revision` once confirmed) before
+reusing a byte-offset map across boards, rather than assuming "close enough" firmware means
+"same struct." When extending confirmed knowledge to a new firmware/hardware combination, add new,
+clearly version-scoped entries or a separate script/version rather than overwriting or silently
+generalizing an existing confirmed mapping — see `docs/knowledge/setup-block-fields.md`'s
+cross-version section for how this was handled in practice (kept the AK32-specific `Pwm_Freq` entry
+unchanged, added new entries for the newly-confirmed fields, never overwrote working data).
+
 ---
 
 ## Scope Notes

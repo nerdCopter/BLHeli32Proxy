@@ -160,19 +160,21 @@ def _print_confirmed_fields(plaintext: bytes, esc_index: int, out_path: str | No
     from .protocol import setup_fields
 
     fields = setup_fields.decode_confirmed_fields(plaintext)
+    name = setup_fields.decode_name(plaintext)
     print(
         "\nConfirmed fields only (see protocol/setup_fields.py docstring — "
         "empirically verified against a real BLHeliSuite32xl backup, NOT a "
         "complete decode; many fields remain unknown and are omitted rather "
         "than guessed):"
     )
-    for name, value in fields.items():
-        print(f"  {name}={value}")
+    print(f"  Eep_Name={name}")
+    for field_name, value in fields.items():
+        print(f"  {field_name}={value}")
     if out_path is not None:
-        _append_ixi_section(out_path, esc_index, fields)
+        _append_ixi_section(out_path, esc_index, fields, name)
 
 
-def _append_ixi_section(out_path: str, esc_index: int, fields: dict) -> None:
+def _append_ixi_section(out_path: str, esc_index: int, fields: dict, name: str | None = None) -> None:
     """Append one [ESCn] section to a partial-backup .ixi-style file, writing
     the not-a-real-.ixi warning header first if the file doesn't exist yet."""
     from .protocol import setup_fields
@@ -183,7 +185,7 @@ def _append_ixi_section(out_path: str, esc_index: int, fields: dict) -> None:
         if is_new:
             f.write(setup_fields.IXI_PARTIAL_BACKUP_WARNING)
             f.write("\n")
-        f.write(setup_fields.format_ixi_section(esc_index, fields))
+        f.write(setup_fields.format_ixi_section(esc_index, fields, name))
         f.write("\n")
     print(f"Appended [ESC{esc_index + 1}] section to {path}")
 

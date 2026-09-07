@@ -75,12 +75,27 @@ into permanent docs.
    `docs/knowledge/hardware-findings.md`'s "`write_flash()` without erase-first" section for the
    full incident and the confirmed repair (write the complete structure in one call). `page_erase()`
    still untested against real hardware.
-3. `enter_4way_if()` has zero retry logic (unlike `connect_esc()`'s 3-attempt/5.5s-delay design) —
+3. **Re-check AK32 with the current script/field-map to rule out contamination — partially done,
+   `.ixi`-level check passed.** Today's session (a) directly wrote to AK32 motor 0's Setup block
+   twice (the corruption incident, then the full-block-copy repair from motor 3) and (b)
+   significantly expanded `CONFIRMED_FIELDS` afterward (13 → 27 fields, mostly confirmed on
+   Furling32, not re-verified on AK32 since). A fresh real `.ixi` export exists for all 4 ESCs, same
+   day, after the repair (`docs/knowledge/BLHeli32_Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 -
+   Multi_260907.ixi`) — **every field on every ESC matches the original known-good baseline
+   exactly**, no drift. **Still not done**: a real raw-byte check using this session's own tooling
+   (not just the app's own `.ixi` export) — run `dump-config --raw-dir dumps` (all 4 ESCs, current
+   code) fresh, confirm all 27 `CONFIRMED_FIELDS` + `Eep_Name` decode correctly, and diff the raw
+   bytes against the pre-incident backups already on file
+   (`dumps/esc0-3-setup-20260907-155420/155421.bin`, this session's first captures) — this would
+   also be the first real-hardware check of the newer fields confirmed only on Furling32 so far
+   (`Curr_Prot`, `Curr_Sense_Cal`, `LED_Control`, `SBUS_Channel`, `SPORT_Physical_ID` — expected to
+   read as sentinel values 255/255/0/255/100 on AK32, unconfirmed on this exact hardware until now).
+4. `enter_4way_if()` has zero retry logic (unlike `connect_esc()`'s 3-attempt/5.5s-delay design) —
    today's session hit several `enter_4way_if` failures that a retry loop (matching
    BLHeliSuite32xl's own 5-attempt default, 1–10 user-configurable) would likely absorb.
-4. Furling32's remaining 288-byte gap — `--discover-unresolved` is built and works, just never run
+5. Furling32's remaining 288-byte gap — `--discover-unresolved` is built and works, just never run
    to completion (≈11 hours at the measured rate). Revisit only if it becomes worth the time.
-5. `docs/knowledge/DNS-dump.txt` (untracked) — a raw tcpdump paste already fully analyzed and
+6. `docs/knowledge/DNS-dump.txt` (untracked) — a raw tcpdump paste already fully analyzed and
    folded into `activation-licensing.md`'s findings; low standalone value, candidate for deletion
    rather than committing as-is. Not decided.
 

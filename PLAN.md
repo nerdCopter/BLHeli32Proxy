@@ -144,17 +144,29 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   the tool itself. Closed unless the firmware-loss trade-off and the soldering/tooling effort are
   both explicitly accepted.
 
-- **Cross-version Setup-block field validation — partially done.** Real `.ixi` backups exist for 4
-  ESC families/firmware revisions (a 6S 4-in-1 ESC on firmware 32.7, and 3 more boards on 32.9,
-  32.9.5, and 32.10 — see [Hardware Findings](docs/knowledge/hardware-findings.md) for full
-  per-board detail). Field *names*: 12 of the 13 confirmed fields are identical across all 4
-  revisions; the one confirmed structural change is `Eep_Pgm_Pwm_Freq` (a single byte on 32.7,
-  which only supported static PWM) splitting into `Eep_Pgm_Pwm_Frequency_Hi`/`_Lo` (two bytes) on
-  firmware 32.9+, which added variable PWM. Byte *offsets* on the non-32.7 firmware are **not yet
-  confirmed** — needs a fresh `dump-config --out` read via this project's own tool against one of
-  those boards, since the real app's own debug logs elide the raw Setup-block payload and `.ixi`
-  files only contain already-decoded values. See
-  [Setup Block Fields](docs/knowledge/setup-block-fields.md) for the full method.
+- **Cross-version Setup-block field validation — 28 of 46 known field names confirmed
+  (2026-09-07).** Real raw `dump-config --raw-dir` reads (not just `.ixi`-decoded values) now exist
+  for 2 boards: AK32 (STM32F051x6, firmware 32.7, 38 known field names) and Furling32 (GD32F350x6,
+  firmware 32.9.5, 45 known field names) — a different MCU vendor and major firmware line, 46 total
+  unique names between them. **21 of 22 originally AK32-derived offsets matched exactly** on
+  Furling32 too; only `Eep_Pgm_Pwm_Freq` differs, and that's explained (same byte/offset, renamed
+  `Eep_Pgm_Pwm_Frequency_Lo` on 32.9+, with a genuinely new `_Hi` field elsewhere for the added
+  variable-PWM feature) rather than the struct having shifted. **5 more fields fully confirmed via
+  real differential tests** on the same Furling32 (a temporary, reversible Setup-block edit via the
+  real app, not this project's own `write_flash()`): `Eep_Pgm_Curr_Prot`, `Eep_Pgm_Curr_Sense_Cal`,
+  `Eep_Pgm_LED_Control` (this closed the last of the original 3-offset AK32 chase), `Eep_Pgm_SBUS_Channel`,
+  `Eep_Pgm_SPORT_Physical_ID`. See [Setup Block Fields](docs/knowledge/setup-block-fields.md)'s
+  "Cross-version validation" section for the full method and evidence, including two disproven
+  guesses along the way (kept, not deleted, per this project's own knowledge-retention standard).
+  **Follow-up, not yet started**: (1) `Eep_Note_Array` (the melody note sequence) — untried, would
+  need a real note-sequence change + diff, more complex than the single-value fields done so far;
+  (2) re-run this same raw-byte differential method against the other 2 real boards already on file
+  (FOXEER Reaper 32.10, Furling32_4in1_C 32.9) whenever that hardware is available again — only
+  `.ixi`-decoded values have ever been captured for those two, never raw Setup-block bytes; (3) the
+  remaining ~12 fields (`Eep_Hw_*` capability flags, `Eep_ESC_Layout`/`Eep_ESC_Mode`/
+  `Eep_FW_*_Revision`/`Eep_Layout_Revision`, `Eep_SPORT_Capable`) have no user-facing control to
+  differentially test at all — would need a genuinely different technique (e.g. comparing boards
+  with different hardware capabilities, or real firmware disassembly) to ever localize.
 
 - **BLHeliSuite32TestActivator — dead end, not pursued further.** A manufacturer/factory
   provisioning tool (not an end-user trial app) found in BLHeli's own distribution — has a

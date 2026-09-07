@@ -18,17 +18,22 @@ REAL_ESC0_FIELDS = {
     "Eep_Pgm_Enable_Throttle_Cal": 1,
     "Eep_Pgm_Temp_Prot_Enable": 140,
     "Eep_Pgm_Volt_Prot": 0,
+    "Eep_Pgm_Curr_Prot": 255,
     "Eep_Pgm_Enable_Power_Prot": 1,
     "Eep_Pgm_Brake_On_Stop": 0,
     "Eep_Pgm_Beep_Strength": 40,
     "Eep_Pgm_Beacon_Strength": 70,
     "Eep_Pgm_Beacon_Delay": 600,
+    "Eep_Pgm_LED_Control": 0,
     "Eep_Pgm_Max_Acceleration": 0,
     "Eep_Pgm_Nondamped_Mode": 0,
+    "Eep_Pgm_Curr_Sense_Cal": 100,
     "Eep_Note_Config": 80,
     "Eep_Pgm_Sine_Mode": 0,
     "Eep_Pgm_Auto_Tlm_Mode": 0,
     "Eep_Pgm_Stall_Prot": 1,
+    "Eep_Pgm_SBUS_Channel": 255,
+    "Eep_Pgm_SPORT_Physical_ID": 255,
 }
 
 

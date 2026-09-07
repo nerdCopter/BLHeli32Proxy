@@ -35,6 +35,41 @@ file's own on-disk format, not just this module's convention).
 `Eep_Note_Array` (the actual melody note sequence) remains undecoded —
 substantially more complex, a variable-length sequence, not attempted.
 
+**2 more fields (2026-09-07, cross-version differential capture)**:
+`Eep_Pgm_Curr_Prot` (offset 17, literal Amp threshold, e.g. 200 = 200A) and
+`Eep_Pgm_Curr_Sense_Cal` (offset 27, `raw - 100 = percent`, e.g. 1 = -99%) —
+confirmed via a real differential test on a Furling32 (GD32F350x6, firmware
+32.9.5), not the AK32 these other fields were confirmed against. AK32 lacks
+current-sense hardware and its own real `.ixi` export never lists these two
+field names at all, but the underlying bytes still physically exist there
+(offset 17 = 0xFF, offset 27 = 100 on that hardware) — this DISPROVES an
+earlier hypothesis that offset 17 was a retired BLHeli_S-heritage
+placeholder (it seemed to fit that pattern before this field was found).
+Working theory (unproven): the same physical byte slot may be unused/inert
+on older or current-sense-less hardware and only actively written on
+hardware that has the corresponding feature — 21 of the 22 other confirmed
+fields held their exact offsets across both boards, so this is the one
+place a real difference showed up, not evidence the whole map is
+board-specific. See docs/knowledge/setup-block-fields.md's cross-version
+section for the full account, including the earlier wrong guess.
+
+**3 more fields (2026-09-07, same Furling32 session)**: `Eep_Pgm_LED_Control`
+(offset 24 -- this closes the last of the original 3-gap chase; an earlier
+guess that this offset was `Curr_Prot` is now known wrong, see above),
+`Eep_Pgm_SBUS_Channel` (offset 32, raw = channel number), and
+`Eep_Pgm_SPORT_Physical_ID` (offset 33, raw = ID number) -- all confirmed
+via one differential pass changing all three to distinct values at once.
+`LED_Control` packs multiple LEDs' state into one byte (e.g. `0x33` =
+`0b00110011`, matching an observed "On, Off, On" 3-LED pattern via 2 bits
+per LED) -- the offset and general packed-byte nature are confirmed by the
+clean single-attributable diff; the exact bit-width/color encoding is
+inferred from one data point, not exhaustively mapped. `SBUS_Channel` and
+`SPORT_Physical_ID` don't exist on AK32 (no SBUS/S.PORT support in that
+firmware) -- both read `255` (sentinel) there, same pattern as
+`Curr_Prot`/`Curr_Sense_Cal`. `Eep_SPORT_Capable` (a non-`Pgm_` hardware
+capability flag, same category as the `Eep_Hw_*` flags) remains unlocated
+-- no user-facing control exists for it, so this method can't reach it.
+
 BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms some field
 *names* but NOT these offsets or widths — BLHeli_32 (closed-source) widened
 several fields (e.g. throttle values: 1 scaled byte in BLHeli_S vs. 2 raw
@@ -65,17 +100,22 @@ CONFIRMED_FIELDS: dict[str, tuple[int, int]] = {
     "Eep_Pgm_Enable_Throttle_Cal": (14, 1),
     "Eep_Pgm_Temp_Prot_Enable": (15, 1),
     "Eep_Pgm_Volt_Prot": (16, 1),
+    "Eep_Pgm_Curr_Prot": (17, 1),
     "Eep_Pgm_Enable_Power_Prot": (18, 1),
     "Eep_Pgm_Brake_On_Stop": (19, 1),
     "Eep_Pgm_Beep_Strength": (20, 1),
     "Eep_Pgm_Beacon_Strength": (21, 1),
     "Eep_Pgm_Beacon_Delay": (22, 2),
+    "Eep_Pgm_LED_Control": (24, 1),
     "Eep_Pgm_Max_Acceleration": (25, 1),
     "Eep_Pgm_Nondamped_Mode": (26, 1),
+    "Eep_Pgm_Curr_Sense_Cal": (27, 1),
     "Eep_Note_Config": (28, 1),
     "Eep_Pgm_Sine_Mode": (29, 1),
     "Eep_Pgm_Auto_Tlm_Mode": (30, 1),
     "Eep_Pgm_Stall_Prot": (31, 1),
+    "Eep_Pgm_SBUS_Channel": (32, 1),
+    "Eep_Pgm_SPORT_Physical_ID": (33, 1),
 }
 
 
@@ -91,6 +131,25 @@ def decode_confirmed_fields(plaintext: bytes) -> dict[str, int]:
             )
         result[name] = int.from_bytes(plaintext[offset : offset + width], "little")
     return result
+
+
+# Eep_Name: confirmed 2026-09-07 via differential capture — setting the app's "Name" field to a
+# 16-character string changed exactly these 16 bytes, none else. Matches BLHeli_S's own EEPROM
+# comment for this same field name ("Name tag (16 Bytes)") exactly. Kept separate from
+# CONFIRMED_FIELDS (an int-only table) since this is a fixed-width space-padded ASCII string, not
+# an integer.
+EEP_NAME_OFFSET = 128
+EEP_NAME_WIDTH = 16
+
+
+def decode_name(plaintext: bytes) -> str:
+    """Decode Eep_Name (offset 128, 16 bytes, space-padded ASCII) — see EEP_NAME_OFFSET's
+    comment. Trailing spaces stripped, matching how a real .ixi's Eep_Name value appears
+    (blank when unset, e.g. "Eep_Name=")."""
+    if EEP_NAME_OFFSET + EEP_NAME_WIDTH > len(plaintext):
+        raise ValueError(f"plaintext too short ({len(plaintext)} bytes) for Eep_Name")
+    raw = plaintext[EEP_NAME_OFFSET : EEP_NAME_OFFSET + EEP_NAME_WIDTH]
+    return raw.decode("ascii", errors="replace").rstrip(" ")
 
 
 def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
@@ -120,18 +179,22 @@ def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
 IXI_PARTIAL_BACKUP_WARNING = (
     "; Partial backup written by blheli32proxy — confirmed fields only (see\n"
     "; protocol/setup_fields.py). NOT a complete .ixi: missing header fields\n"
-    "; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~16 undecoded Eep_Note_Array/\n"
+    "; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~18 undecoded Eep_Note_Array/\n"
     "; Eep_Hw_* fields. Do not load this into BLHeliSuite32xl or any other\n"
     "; tool expecting a real .ixi — it will misinterpret the missing fields.\n"
 )
 
 
-def format_ixi_section(esc_index: int, fields: dict[str, int]) -> str:
+def format_ixi_section(esc_index: int, fields: dict[str, int], name: str | None = None) -> str:
     """Format confirmed fields as one `[ESCn]` section (1-based, matching
     BLHeliSuite32xl's real .ixi numbering) for a partial backup file. Emits
-    only CONFIRMED_FIELDS, in the same order as a real .ixi — never fabricate
-    the unconfirmed fields to make this look like a complete backup."""
+    only CONFIRMED_FIELDS (plus Eep_Name, first, if `name` is given — matching
+    a real .ixi's own field order), never fabricating the unconfirmed fields
+    to make this look like a complete backup. `name` is optional and omitted
+    by default so existing callers that don't have it need no changes."""
     lines = [f"[ESC{esc_index + 1}]"]
-    for name in CONFIRMED_FIELDS:
-        lines.append(f"{name}={fields[name]}")
+    if name is not None:
+        lines.append(f"Eep_Name={name}")
+    for field_name in CONFIRMED_FIELDS:
+        lines.append(f"{field_name}={fields[field_name]}")
     return "\n".join(lines) + "\n"
