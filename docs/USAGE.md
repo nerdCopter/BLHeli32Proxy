@@ -34,7 +34,7 @@ actually does.
 | [`serve`](#3-run-the-approval-server) | Run the approval/activation server | No |
 | [`gen-cert`](#2-generate-a-tls-certificate-needed-if-the-real-activation-call-is-https-which-is-likely) | Generate a self-signed TLS cert/key pair for `serve --cert/--key` | No |
 | [`list-test-firmware`](#6a-listing-archived-test-firmware) | List your archived test-firmware `.Hex` files (read-only) | No |
-| [`dump-setup`](#6-diagnostics-experimental-needs-real-hardware) | Read + best-effort-decrypt an ESC's 256-byte Setup/config block | Yes |
+| [`dump-config`](#6-diagnostics-experimental-needs-real-hardware) | Read + best-effort-decrypt an ESC's 256-byte Setup/config block | Yes |
 | [`probe-flash`](#6b-extracting-a-firmware-backup-experimental-read-only) | Read a small chunk at an arbitrary flash address (sanity check before `dump-info-page`) | Yes |
 | [`dump-info-page`](#6b-extracting-a-firmware-backup-experimental-read-only) | Dump a flash address range to a new file (never into your archive) | Yes |
 
@@ -84,15 +84,15 @@ Read-only — just prints matching `*.Hex` filenames, one per line. Useful for p
 archived test-firmware file to flash *through the real `BLHeliSuite32xl` app* (this tool doesn't
 flash anything itself — see [§6](#6-diagnostics-experimental-needs-real-hardware)). Example:
 ```bash
-export BLHELI32PROXY_ARCHIVE_DIR=~/path/to/this/repo/testcode   # or wherever you keep them
+export BLHELI32PROXY_APP_DIR=~/path/to/BLHeliSuite32xl   # see §1a
 blheli32proxy list-test-firmware
 blheli32proxy list-test-firmware --dir /path/to/other/firmware/dir
 ```
 
-### `dump-setup`
+### `dump-config`
 
 ```
-usage: blheli32proxy dump-setup [-h] --port PORT [--test-firmware]
+usage: blheli32proxy dump-config [-h] --port PORT [--test-firmware]
 
   --port PORT       serial port, e.g. /dev/ttyACM0 or COM3 (required)
   --test-firmware   use the test-firmware XTEA key instead of the production one
@@ -184,34 +184,120 @@ Requires Python 3.9+. Works on Linux, macOS, and Windows — the codebase is pla
 OS-specific code paths in the approval server itself (only the optional hardware-facing
 `protocol/transport.py` backends touch OS-specific APIs, and those aren't needed to run the server).
 
-## 1a. Point the tool at your test-firmware archive (optional)
+## 1a. Point the tool at your test-firmware catalog
 
-`list-test-firmware`'s `--dir` default and `dump-info-page`'s archive-write safety check both read the
-`BLHELI32PROXY_ARCHIVE_DIR` environment variable — a **flat folder of `.Hex` files** (no version
-subfolders needed; filenames already encode manufacturer/layout/version). There's no built-in
-default, since its location is up to you.
-
-**Simplest setup**: point it directly at this repo's own `testcode/` folder (see
-[testcode/README.md](../testcode/README.md) for how to populate it):
+**Quick setup**: `scripts/setup-env.sh` checks what's already set, asks for whatever's missing, and
+saves it to your shell rc file — safe to re-run any time.
 
 ```bash
-export BLHELI32PROXY_ARCHIVE_DIR=~/path/to/this/repo/testcode
+./scripts/setup-env.sh
 ```
 
-Or point it at a broader personal archive folder from elsewhere, if you already keep one — either
-way, this project only ever reads from it (never writes into it, except the deliberate refusal
-check below).
+Or set them manually — details below.
 
-Add this to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist it. If unset:
-`list-test-firmware --dir` becomes required (no default), and `dump-info-page` still runs but skips
-its archive-write safety check with a warning — double-check `--out` yourself in that case.
+`list-test-firmware`'s `--dir` default, `dump-firmware`'s `--candidate` search, and
+`dump-info-page`'s archive-write safety check all read **two** environment variables — a **flat
+folder of `.Hex` files** either way (no version subfolders needed; filenames already encode
+manufacturer/layout/version):
+
+- **`BLHELI32PROXY_APP_DIR`** — the vendor app's (`BLHeliSuite32xl`/`.exe`/`.app`) install folder.
+  Most users only need this one: the tool derives its `BLHeli32_HexFiles/` subfolder automatically
+  (the same folder the real app itself reads its Flash-tab dropdown from — see
+  [§6](#6-diagnostics-experimental-needs-real-hardware) for why that folder must be populated
+  anyway, independent of this project).
+- **`BLHELI32PROXY_ARCHIVE_DIR`** — optional, for a broader personal collection kept separately
+  from the app's own folder (e.g. every historical version, not just what the app currently
+  bundles). Checked first when both are set.
+
+```bash
+export BLHELI32PROXY_APP_DIR=~/path/to/BLHeliSuite32xl        # most users: this alone is enough
+export BLHELI32PROXY_ARCHIVE_DIR=~/path/to/a/broader/archive  # optional, power users only
+```
+
+Add whichever you use to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist it. This project
+only ever reads from either directory (never writes into it, except the deliberate refusal check
+below, which covers both). If neither is set: `list-test-firmware --dir` becomes required (no
+default), and `dump-info-page`/`dump-firmware` still run but skip the archive-write safety check
+with a warning — double-check `--out` yourself in that case.
 
 ## 1b. Obtaining test-firmware `.Hex` files from the official source
 
-This project never bundles or publishes BLHeli's copyrighted vendor firmware — see
-[testcode/README.md](../testcode/README.md) for exactly how to fetch it yourself from BLHeli's own
-official GitHub history (latest-only or every historical version, your choice), both
-human-actionable and AI-actionable.
+This project never bundles or publishes BLHeli's copyrighted vendor firmware — you fetch your own
+copy directly from BLHeli's own official GitHub history, then copy the files into whichever
+directory you set above (its `BLHeli32_HexFiles/` subfolder if using `$BLHELI32PROXY_APP_DIR`, or
+directly into `$BLHELI32PROXY_ARCHIVE_DIR` if you use that instead).
+
+**Source**: `https://github.com/bitdump/BLHeli` — the `BLHeli_32 ARM/` folder held the full
+per-manufacturer test-firmware collection until it was removed on 2024-06-04 (commit `26fbb46e41`,
+"Removed testcodes"), after the vendor shut down mid-2024. Everything below recovers those files
+from the repo's own history — nothing is bundled in this repo itself.
+
+**Option A — latest only** (smaller, faster; recommended default): the final snapshot of every
+manufacturer's most recently published test build, as of the commit right before removal
+(`9577152ca9`, 2024-05-29):
+
+```bash
+git clone --depth 1 https://github.com/bitdump/BLHeli.git /tmp/blheli-source
+cd /tmp/blheli-source
+git fetch --unshallow   # GitHub rejects fetching an arbitrary commit SHA on a shallow clone
+git checkout 9577152ca9 -- "BLHeli_32 ARM"
+find "BLHeli_32 ARM" -iname "*.Hex" -exec cp -p {} /path/to/your/destination/ \;
+```
+
+Note: this snapshot's filenames may show an older version (`_32_7`, `_32_8`, etc.) if that
+manufacturer's build wasn't refreshed again before removal — not every file here is actually the
+newest version ever published for that manufacturer. Use Option B for a specific older/missing
+version.
+
+**Option B — all historical versions** (larger, slower): test files were added incrementally over
+2023-2024 and reorganized more than once, so the single latest snapshot doesn't necessarily contain
+every version that ever existed.
+
+```bash
+git clone https://github.com/bitdump/BLHeli.git /tmp/blheli-source
+cd /tmp/blheli-source
+git log --follow --diff-filter=A --name-only --pretty=format:"%h %ad %s" --date=short -- "BLHeli_32 ARM" | less
+```
+
+Known relevant commits, oldest first (re-verify with the command above — this repo may add more):
+
+| Commit | Date | What changed |
+|---|---|---|
+| `20c36c2695` | 2023-07-08 | Added testcode |
+| `f11ef06901` | 2023-12-10 | Added testcodes |
+| `73984a150c` | 2023-12-22 | Added testcodes |
+| `1061b23218` | 2024-01-14 | Added testcode |
+| `2a6262c5d6` | 2024-04-25 | Added HW codes |
+| `3dfbc4bf50` | 2024-04-25 | Create FLASH_HOBBY_BLHELI_32_Multi_32_7.Hex |
+| `9577152ca9` | 2024-05-29 | Last commit before removal (Option A's snapshot) |
+| `26fbb46e41` | 2024-06-04 | **Removed testcodes** — everything gone after this |
+
+Check out each commit of interest into a distinctly-named subdirectory so snapshots don't collide:
+
+```bash
+mkdir -p /tmp/blheli-source/by-commit
+for c in 20c36c2695 f11ef06901 73984a150c 1061b23218 2a6262c5d6 3dfbc4bf50 9577152ca9; do
+  git -C /tmp/blheli-source checkout "$c" -- "BLHeli_32 ARM"
+  mkdir -p "/tmp/blheli-source/by-commit/$c"
+  find "/tmp/blheli-source/BLHeli_32 ARM" -iname "*.Hex" -exec cp -p {} "/tmp/blheli-source/by-commit/$c/" \;
+done
+```
+
+Then copy whichever specific files you actually need (by manufacturer/layout/version in the
+filename) from `by-commit/<commit>/` into your destination — don't copy everything from every
+commit, since later snapshots mostly superset earlier ones.
+
+**Verifying it worked**:
+
+```bash
+blheli32proxy list-test-firmware   # uses whichever env var you set above
+```
+
+**For an AI assistant automating this**: confirm Option A vs B with the user if unstated; run the
+clone/checkout commands directly (read-only against upstream, a fresh temp clone each time); copy
+only `.Hex` files, never other file types (manuals, `.apk`, specs) unless separately asked; report
+the count copied and confirm with `list-test-firmware`; never commit the copied `.Hex` files to
+this project's own repo (see the Publishing Gate in `AGENTS.md`).
 
 ## 2. Generate a TLS certificate (needed if the real activation call is HTTPS, which is likely)
 
@@ -395,7 +481,7 @@ blheli32proxy list-test-firmware --dir /path/to/other/firmware/dir
 
 ## 6. Diagnostics (experimental, needs real hardware)
 
-`blheli32proxy dump-setup --port /dev/ttyACM0` (or `COM3` on Windows) connects directly to an ESC
+`blheli32proxy dump-config --port /dev/ttyACM0` (or `COM3` on Windows) connects directly to an ESC
 over serial and attempts to read+decrypt its 256-byte Setup/config block, independent of
 `BLHeliSuite32xl`. This is read-only diagnostic tooling, **not** part of the normal
 flash/activation workflow (see [PLAN.md §4](../PLAN.md#4-architecture-decision)) — the underlying cipher is not verified against real
@@ -409,7 +495,7 @@ answering the app's activation call ([§3](#3-run-the-approval-server)-[§4](#4-
 ## 6b. Extracting a firmware backup (experimental, read-only)
 
 `probe-flash` and `dump-info-page` read an arbitrary flash address on a connected ESC — separate from
-`dump-setup` above, which only reads the small config block. This is **read-only**: it cannot
+`dump-config` above, which only reads the small config block. This is **read-only**: it cannot
 corrupt or brick the ESC the way a bad *write* could, and `dump-info-page` refuses to write its output
 anywhere under `$BLHELI32PROXY_ARCHIVE_DIR` (your archived BLHeli material), when that env var is
 set, regardless of what path you give it. If the env var isn't set, this check is skipped with a
@@ -462,7 +548,7 @@ real flash content back over the wire, only a match/mismatch signal, and RDP doe
 internal comparison the way it blocks a raw read (see
 [Hardware Findings](knowledge/hardware-findings.md#the-verify-oracle-exploration)). `dump-firmware`
 uses this: it compares real flash against one or more candidate `.Hex` files you already have (e.g.
-from `BLHeli32_HexFiles/` or `testcode/`), bisecting down to whatever sub-range each candidate
+from `BLHeli32_HexFiles/` or your `$BLHELI32PROXY_ARCHIVE_DIR`), bisecting down to whatever sub-range each candidate
 actually confirms rather than treating a fixed chunk as all-or-nothing — a candidate that only
 partially covers a range still confirms the part it does cover.
 

@@ -40,8 +40,8 @@ blheli32proxy serve --cert ~/.blheli32proxy/approval.crt --key ~/.blheli32proxy/
 ```
 
 You'll also need your own copy of test-firmware `.Hex` files — this project never bundles BLHeli's
-copyrighted vendor binaries. See [testcode/README.md](testcode/README.md) for how to fetch them
-from BLHeli's official GitHub history.
+copyrighted vendor binaries. See [docs/USAGE.md](docs/USAGE.md) §1a/§1b for how to point this tool
+at your files and fetch them from BLHeli's official GitHub history.
 
 Full walkthrough, including the OS-level hostname (and port) redirect that points
 `BLHeliSuite32xl` at this server: [docs/USAGE.md](docs/USAGE.md). Or use [MENU.md](MENU.md) for a
@@ -53,8 +53,7 @@ guided, step-by-step task list instead of reading the full docs first.
 |---|---|
 | [MENU.md](MENU.md) | Guided task list — start here if you're not sure what to do first |
 | [PLAN.md](PLAN.md) | Goals, architecture decisions, status, open questions |
-| [docs/USAGE.md](docs/USAGE.md) | CLI reference, install, OS-level redirect setup |
-| [testcode/README.md](testcode/README.md) | How to populate test-firmware `.Hex` files yourself |
+| [docs/USAGE.md](docs/USAGE.md) | CLI reference, install, OS-level redirect setup, populating test-firmware `.Hex` files (§1a/§1b) |
 | [docs/knowledge/INDEX.md](docs/knowledge/INDEX.md) | Confirmed protocol/hardware/licensing reference |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Module-by-module build status |
 | [research/README.en.md](research/README.en.md) | Original translated research notes |

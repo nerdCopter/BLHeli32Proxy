@@ -34,7 +34,7 @@ into permanent docs.
    the user's archive holds. All docs/`AGENTS.md` references updated to match.
 6. **`dump-flash` renamed to `dump-info-page`** — clearer name (it only ever reads the `0x7C00`+
    info page; the old name read as if it dumped all flash, which it never could).
-7. **`dump-setup --show-defaults CANDIDATE_HEX`** — new: the candidate `.Hex` file itself contains
+7. **`dump-config --show-defaults CANDIDATE_HEX`** — new: the candidate `.Hex` file itself contains
    a genuine decryptable factory-default Setup block (same XTEA key, `0x7C00`). Prints a per-field
    real-vs-default comparison. Confirmed working against real captured plaintext.
 8. **OX32 (third-party web configurator) research**: confirmed independently, via its own client

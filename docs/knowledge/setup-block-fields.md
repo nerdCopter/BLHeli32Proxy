@@ -40,7 +40,7 @@ at their natural sequential position confirmed 13 fields total.
 | 21 | 1 | `Eep_Pgm_Beacon_Strength` | 70 |
 | 22–23 | 2 (LE) | `Eep_Pgm_Beacon_Delay` | 600 |
 
-Live-verified: `dump-setup --motor-index 0` against the real hardware prints all 13 confirmed
+Live-verified: `dump-config --motor-index 0` against the real hardware prints all 13 confirmed
 fields, every value matching the real `.ixi`'s `[ESC1]` section exactly.
 
 ## What's NOT decoded, and why
@@ -94,7 +94,7 @@ before.
 compared the app's own already-decoded field names/values (from `.ixi` files) — it did not use raw
 Setup-block bytes from these boards (this project's own tool was never run against them; the real
 app's own debug logs elide the Setup-block payload as `[...]`). **To actually confirm offsets on
-32.9+ firmware**: reconnect one of these boards, run `dump-setup --port ... --motor-index N`, and
+32.9+ firmware**: reconnect one of these boards, run `dump-config --port ... --motor-index N`, and
 diff the raw decrypted plaintext against the corresponding `.ixi` section byte-by-byte, same method
 as the original AK32 confirmation above. Not yet done — a good next step when hardware is
 available again.

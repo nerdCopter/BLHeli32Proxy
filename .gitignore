@@ -16,11 +16,6 @@ dist/
 dumps/*.bin
 dumps/*.hex
 
-# BLHeli's own copyrighted test-firmware binaries (see testcode/README.md for how to
-# populate this folder yourself from the official upstream repo) — never bundled here.
-testcode/*.Hex
-testcode/*.hex
-testcode/*.bin
 
 # Local secrets/state
 .blheli32proxy/

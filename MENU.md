@@ -14,14 +14,16 @@ pull request; this is a community-maintained tool.
 
 Fetches the per-manufacturer test-firmware `.Hex` files this tool and the real `BLHeliSuite32xl`
 app both need, from BLHeli's own official GitHub history (nothing is bundled in this repo — see
-`testcode/README.md` and `AGENTS.md`'s Publishing Gate for why).
+`docs/USAGE.md` §1b and `AGENTS.md`'s Publishing Gate for why), copying them into whichever
+destination `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` you have set (see `docs/USAGE.md`
+§1a).
 
 - **Latest only** (default, faster): one snapshot covering every manufacturer's most recent
   published build.
 - **All historical versions** (slower): every version ever published, for when you need a specific
   older build a manufacturer hasn't re-published since.
 
-**AI-actionable**: read `testcode/README.md` and follow Option A or B exactly as written there —
+**AI-actionable**: read `docs/USAGE.md` §1b and follow Option A or B exactly as written there —
 ask the user which one if they haven't said, then run the commands and report the file count
 copied in.
 

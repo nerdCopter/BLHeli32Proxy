@@ -3,7 +3,7 @@
 Empirical findings from real-hardware testing (2026-09-04): PyroDrone F7 (EmuFlight 0.4.3) + Aikon
 AK32 4-in-1 35A 6S (BLHeli_32 firmware 32.7, STM32F051x6 — confirmed twice independently, 2026-09-06:
 Aikon's own product page, `aikon-electronics.com/index.php?id=20`, states "MCU: STM32 F0" [family
-only]; this board's own Setup-block `ESC_CPU` field, offset `0x60`, read live via `dump-setup
+only]; this board's own Setup-block `ESC_CPU` field, offset `0x60`, read live via `dump-config
 --motor-index 0` [read-only: enter_4way_if → connect_esc → read_flash(0x7C00,256) → decrypt, no
 write/erase], decodes to the literal ASCII string `#BLHeli_32*STM32F051x6#` — the exact sub-variant,
 confirmed directly from this hardware, not inherited from the research blog post's different example
@@ -39,7 +39,7 @@ ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#`
   [Suite-Check.txt](Suite-Check.txt)) and via this project's own code connecting to and reading all
   4 channels reliably, once the two issues above were accounted for.
 - **Cross-validated through Betaflight passthrough (2026-09-04)**: same PyroDrone F7, this time
-  running Betaflight instead of EmuFlight. `dump-setup --motor-index N` decrypted all 4 channels correctly;
+  running Betaflight instead of EmuFlight. `dump-config --motor-index N` decrypted all 4 channels correctly;
   `Eep_Pgm_Direction` read `1,2,2,1` for motors 0-3, exactly matching the AK32 `.ixi` ground truth
   (see [Setup Block Fields](setup-block-fields.md)) — confirms the 4-way-if protocol and field
   decode are FC-firmware-agnostic, not an EmuFlight-specific result.
@@ -71,7 +71,7 @@ ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#`
   *inside* the ~5s lockout, so extra attempts (even 5 of them) mostly failed too — matching what
   was observed. Confirmed live: with `retry_delay` raised to 5.5s, motor 0 (previously 0/10 across
   two failing test batches) succeeded on the 2nd attempt 3 times in a row, no failures past
-  attempt 2. Then all 4 motors connected via the real CLI (`dump-setup`) on the first or second try
+  attempt 2. Then all 4 motors connected via the real CLI (`dump-config`) on the first or second try
   with no further diagnosis needed. **Fix applied**: `connect_esc()` now defaults to `attempts=3`,
   `retry_delay=5.5` (down from the interim `attempts=5`/`retry_delay=0.3` mitigation, which treated
   the symptom without the correct delay). Whether the real BLHeliSuite32xl app avoids this by using

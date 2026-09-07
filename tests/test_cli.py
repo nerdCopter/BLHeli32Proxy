@@ -63,7 +63,7 @@ def test_dump_flash_refuses_to_write_into_archive(tmp_path, monkeypatch, capsys)
     result = cli._cmd_dump_info_page(args)
     assert result == 1
     captured = capsys.readouterr()
-    assert "Refusing to write into the archived BLHeli directory" in captured.err
+    assert f"Refusing to write into the ${cli.ARCHIVE_DIR_ENV_VAR} directory" in captured.err
 
 
 def test_dump_flash_allows_a_non_archive_path(tmp_path, monkeypatch, capsys):
@@ -96,6 +96,7 @@ def test_dump_flash_allows_a_non_archive_path(tmp_path, monkeypatch, capsys):
 
 def test_dump_flash_warns_when_archive_dir_unset(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(cli.ARCHIVE_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv(cli.APP_DIR_ENV_VAR, raising=False)
     parser = cli.build_parser()
     args = parser.parse_args(
         [
@@ -113,7 +114,7 @@ def test_dump_flash_warns_when_archive_dir_unset(tmp_path, monkeypatch, capsys):
     except Exception:
         pass  # expected: no real serial port to open
     captured = capsys.readouterr()
-    assert f"${cli.ARCHIVE_DIR_ENV_VAR} is not set" in captured.err
+    assert f"neither ${cli.ARCHIVE_DIR_ENV_VAR} nor ${cli.APP_DIR_ENV_VAR} is set" in captured.err
 
 
 def test_list_test_firmware_lists_only_hex_files_sorted(tmp_path, capsys):
@@ -138,13 +139,46 @@ def test_list_test_firmware_uses_archive_dir_env_var_as_default(tmp_path, monkey
     assert capsys.readouterr().out.splitlines() == ["Furling32_Multi_32_9.Hex"]
 
 
+def test_list_test_firmware_falls_back_to_app_dirs_hexfiles_subfolder(tmp_path, monkeypatch, capsys):
+    """Most end users only have the vendor app installed, not a separate
+    broader archive — $BLHELI32PROXY_APP_DIR's own BLHeli32_HexFiles/
+    subfolder must work as the fallback catalog when $ARCHIVE_DIR isn't set."""
+    monkeypatch.delenv(cli.ARCHIVE_DIR_ENV_VAR, raising=False)
+    hexfiles = tmp_path / "BLHeliSuite32xl" / "BLHeli32_HexFiles"
+    hexfiles.mkdir(parents=True)
+    (hexfiles / "Furling32_Multi_32_9.Hex").write_bytes(b"")
+    monkeypatch.setenv(cli.APP_DIR_ENV_VAR, str(tmp_path / "BLHeliSuite32xl"))
+    parser = cli.build_parser()
+    args = parser.parse_args(["list-test-firmware"])
+    result = cli._cmd_list_test_firmware(args)
+    assert result == 0
+    assert capsys.readouterr().out.splitlines() == ["Furling32_Multi_32_9.Hex"]
+
+
+def test_list_test_firmware_prefers_archive_dir_over_app_dir(tmp_path, monkeypatch, capsys):
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    (archive / "FromArchive_Multi_32_9.Hex").write_bytes(b"")
+    app_hexfiles = tmp_path / "app" / "BLHeli32_HexFiles"
+    app_hexfiles.mkdir(parents=True)
+    (app_hexfiles / "FromApp_Multi_32_9.Hex").write_bytes(b"")
+    monkeypatch.setenv(cli.ARCHIVE_DIR_ENV_VAR, str(archive))
+    monkeypatch.setenv(cli.APP_DIR_ENV_VAR, str(tmp_path / "app"))
+    parser = cli.build_parser()
+    args = parser.parse_args(["list-test-firmware"])
+    result = cli._cmd_list_test_firmware(args)
+    assert result == 0
+    assert capsys.readouterr().out.splitlines() == ["FromArchive_Multi_32_9.Hex"]
+
+
 def test_list_test_firmware_no_dir_no_env_var_is_an_error(monkeypatch, capsys):
     monkeypatch.delenv(cli.ARCHIVE_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv(cli.APP_DIR_ENV_VAR, raising=False)
     parser = cli.build_parser()
     args = parser.parse_args(["list-test-firmware"])
     result = cli._cmd_list_test_firmware(args)
     assert result == 1
-    assert f"${cli.ARCHIVE_DIR_ENV_VAR} is not set" in capsys.readouterr().err
+    assert f"neither ${cli.ARCHIVE_DIR_ENV_VAR} nor ${cli.APP_DIR_ENV_VAR} is set" in capsys.readouterr().err
 
 
 def test_list_test_firmware_rejects_non_directory(tmp_path, capsys):

@@ -36,7 +36,7 @@ flowchart TD
 - Raw ciphertext/plaintext Setup-block dump: works reliably, all 4 ESCs (`protocol/fourwayif.py`).
 - 13 confirmed named fields decoded (`protocol/setup_fields.py`) — every value matches a real
   BLHeliSuite32xl `.ixi` backup exactly. See [Setup Block Fields](setup-block-fields.md).
-- Wired into CLI (`dump-setup`/`probe-flash`/`dump-info-page`).
+- Wired into CLI (`dump-config`/`probe-flash`/`dump-info-page`).
 - Not done: the remaining ~26 fields (no public source — BLHeli_32 is closed-source); a dedicated
   backup-file writer that produces a `.ixi`-style multi-`[ESCn]` file (currently prints to stdout
   only); any write-back/restore path (deliberately deferred until fields are fully confirmed).

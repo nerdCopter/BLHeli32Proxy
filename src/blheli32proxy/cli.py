@@ -5,7 +5,7 @@ Subcommands:
   serve               - run the approval/activation server (the actual project deliverable)
   gen-cert            - generate a self-signed TLS cert/key pair for `serve --tls`
   list-test-firmware  - list the user's archived test-firmware .Hex files (read-only)
-  dump-setup          - read+best-effort-decrypt an ESC's Setup block (needs real hardware)
+  dump-config         - read+best-effort-decrypt an ESC's Setup block (needs real hardware)
   probe-flash         - read-only sanity check of one flash address (needs real hardware)
   dump-info-page      - read-only dump of the info page (0x7c00+: Setup block, activation
                         status, device info) to a NEW file (needs real hardware) — RDP blocks
@@ -14,7 +14,7 @@ Subcommands:
                         oracle against candidate .Hex file(s), never the bootloader or the info
                         page above (needs real hardware)
 
-dump-setup/probe-flash/dump-info-page/dump-firmware all take --motor-index when --port is a flight
+dump-config/probe-flash/dump-info-page/dump-firmware all take --motor-index when --port is a flight
 controller's USB port rather than a dedicated ESC adapter — see
 docs/knowledge/protocol-reference.md for the confirmed 4-way-if protocol this drives.
 """
@@ -28,14 +28,35 @@ import sys
 from pathlib import Path
 
 ARCHIVE_DIR_ENV_VAR = "BLHELI32PROXY_ARCHIVE_DIR"
+APP_DIR_ENV_VAR = "BLHELI32PROXY_APP_DIR"
 
 
 def _archive_dir() -> Path | None:
-    """User's archived BLHeli material, from $BLHELI32PROXY_ARCHIVE_DIR. No
-    hardcoded default — the archive lives outside this repo and its path is
-    machine-specific."""
+    """User's broader personal firmware archive, from $BLHELI32PROXY_ARCHIVE_DIR
+    — optional, for users who keep more versions than the vendor app itself
+    bundles. No hardcoded default — machine-specific, lives outside this repo."""
     value = os.environ.get(ARCHIVE_DIR_ENV_VAR)
     return Path(value).expanduser().resolve() if value else None
+
+
+def _app_dir() -> Path | None:
+    """The vendor app's (BLHeliSuite32xl/.exe/.app) install folder, from
+    $BLHELI32PROXY_APP_DIR — what most end users actually have (they need the
+    app anyway to flash). Its BLHeli32_HexFiles/ subfolder is the fallback
+    test-firmware catalog when $BLHELI32PROXY_ARCHIVE_DIR isn't set."""
+    value = os.environ.get(APP_DIR_ENV_VAR)
+    return Path(value).expanduser().resolve() if value else None
+
+
+def _test_firmware_dir() -> Path | None:
+    """The effective test-firmware catalog directory: $BLHELI32PROXY_ARCHIVE_DIR
+    if set (a power-user's broader collection), else $BLHELI32PROXY_APP_DIR's
+    own BLHeli32_HexFiles/ subfolder, else None (caller must ask for --dir)."""
+    archive = _archive_dir()
+    if archive is not None:
+        return archive
+    app = _app_dir()
+    return (app / "BLHeli32_HexFiles") if app is not None else None
 
 MOTOR_INDEX_HELP = (
     "0-based ESC channel index. Pass this when --port is a flight controller's "
@@ -119,8 +140,8 @@ def _cmd_gen_cert(args: argparse.Namespace) -> int:
 def _cmd_list_test_firmware(args: argparse.Namespace) -> int:
     if args.dir is None:
         print(
-            f"--dir not given and ${ARCHIVE_DIR_ENV_VAR} is not set. "
-            f"Pass --dir explicitly or set the env var.",
+            f"--dir not given, and neither ${ARCHIVE_DIR_ENV_VAR} nor ${APP_DIR_ENV_VAR} is set. "
+            f"Pass --dir explicitly, or set one of those env vars.",
             file=sys.stderr,
         )
         return 1
@@ -192,7 +213,7 @@ def _print_defaults_comparison(plaintext: bytes, candidate_path: str, key) -> No
         print(f"  {name}: real={real_value} default={default_value} ({flag})")
 
 
-def _cmd_dump_setup(args: argparse.Namespace) -> int:
+def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Read an ESC's Setup block and print a best-effort decrypt. Not part of
     the normal flashing workflow (the real BLHeliSuite32xl app handles that)
     — see PLAN.md §4 and docs/knowledge/protocol-reference.md."""
@@ -203,7 +224,7 @@ def _cmd_dump_setup(args: argparse.Namespace) -> int:
     transport = SerialTransport(args.port)
 
     if args.motor_index is not None:
-        return _dump_setup_via_fourwayif(transport, args.motor_index, key, args.out, args.show_defaults)
+        return _dump_config_via_fourwayif(transport, args.motor_index, key, args.out, args.show_defaults)
 
     from .protocol.client import BLHeliClient
 
@@ -225,7 +246,7 @@ def _cmd_dump_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _dump_setup_via_fourwayif(
+def _dump_config_via_fourwayif(
     transport, motor_index: int, key, out_path: str | None, show_defaults: str | None = None
 ) -> int:
     """FC-passthrough path (--motor-index): enter the real 4-way-if protocol
@@ -296,7 +317,7 @@ def _cmd_probe_flash(args: argparse.Namespace) -> int:
 
 
 def _probe_flash_via_fourwayif(transport, motor_index: int, address: int, length: int) -> int:
-    """FC-passthrough path (--motor-index) — see _dump_setup_via_fourwayif's
+    """FC-passthrough path (--motor-index) — see _dump_config_via_fourwayif's
     docstring for the protocol this uses. A single 4-way-if frame can only
     carry up to 256 bytes; use dump-info-page for larger ranges."""
     from .protocol import fourwayif as fw
@@ -323,22 +344,27 @@ def _probe_flash_via_fourwayif(transport, motor_index: int, address: int, length
 
 
 def _dump_output_archive_guard(out_path: Path) -> int | None:
-    """Returns an exit code if the write should be refused, else None."""
-    archive_root = _archive_dir()
-    if archive_root is None:
+    """Returns an exit code if the write should be refused, else None. Checks
+    both $BLHELI32PROXY_ARCHIVE_DIR (power users) and $BLHELI32PROXY_APP_DIR
+    (most users — the vendor app's own folder is just as wrong a place to
+    dump into) — a typical user with only APP_DIR set still gets real
+    protection, not just a warning."""
+    roots = [(ARCHIVE_DIR_ENV_VAR, _archive_dir()), (APP_DIR_ENV_VAR, _app_dir())]
+    roots = [(name, root) for name, root in roots if root is not None]
+    if not roots:
         print(
-            f"Warning: ${ARCHIVE_DIR_ENV_VAR} is not set — cannot check whether --out lands "
-            f"inside your archived BLHeli material. Verify --out yourself.",
+            f"Warning: neither ${ARCHIVE_DIR_ENV_VAR} nor ${APP_DIR_ENV_VAR} is set — cannot check "
+            f"whether --out lands inside your archived BLHeli material. Verify --out yourself.",
             file=sys.stderr,
         )
         return None
-    try:
-        out_path.relative_to(archive_root)
-    except ValueError:
-        pass
-    else:
+    for name, root in roots:
+        try:
+            out_path.relative_to(root)
+        except ValueError:
+            continue
         print(
-            f"Refusing to write into the archived BLHeli directory ({archive_root}). "
+            f"Refusing to write into the ${name} directory ({root}). "
             f"Choose a different --out path.",
             file=sys.stderr,
         )
@@ -392,7 +418,7 @@ def _cmd_dump_info_page(args: argparse.Namespace) -> int:
 
 
 def _dump_info_page_via_fourwayif(transport, motor_index, start, end, chunk_size, out_path) -> int:
-    """FC-passthrough path (--motor-index) — see _dump_setup_via_fourwayif's
+    """FC-passthrough path (--motor-index) — see _dump_config_via_fourwayif's
     docstring for the protocol this uses. Each 4-way-if frame caps at 256
     bytes, so --chunk-size must not exceed that."""
     from .protocol import fourwayif as fw
@@ -689,26 +715,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_cert.set_defaults(func=_cmd_gen_cert)
 
     p_list = sub.add_parser("list-test-firmware", help="list archived test-firmware .Hex files")
-    _default_archive = _archive_dir()
+    _default_test_firmware_dir = _test_firmware_dir()
     p_list.add_argument(
         "--dir",
-        default=str(_default_archive) if _default_archive else None,
-        help=f"directory of test-firmware .Hex files "
-        f"(default: ${ARCHIVE_DIR_ENV_VAR} itself, if that env var is set — point it directly at "
-        f"a flat folder of .Hex files, e.g. this repo's own testcode/)",
+        default=str(_default_test_firmware_dir) if _default_test_firmware_dir else None,
+        help=f"directory of test-firmware .Hex files (default: ${ARCHIVE_DIR_ENV_VAR} if set, else "
+        f"${APP_DIR_ENV_VAR}'s own BLHeli32_HexFiles/ subfolder if that's set instead)",
     )
     p_list.set_defaults(func=_cmd_list_test_firmware)
 
-    p_dump = sub.add_parser("dump-setup", help="(experimental, needs hardware) read+decrypt a Setup block")
-    p_dump.add_argument("--port", required=True, help="serial port, e.g. /dev/ttyACM0 or COM3")
-    p_dump.add_argument("--test-firmware", action="store_true", help="use the test-firmware XTEA key")
-    p_dump.add_argument(
+    p_dumpcfg = sub.add_parser("dump-config", help="(experimental, needs hardware) read+decrypt a Setup block")
+    p_dumpcfg.add_argument("--port", required=True, help="serial port, e.g. /dev/ttyACM0 or COM3")
+    p_dumpcfg.add_argument("--test-firmware", action="store_true", help="use the test-firmware XTEA key")
+    p_dumpcfg.add_argument(
         "--motor-index",
         type=int,
         default=None,
         help=MOTOR_INDEX_HELP,
     )
-    p_dump.add_argument(
+    p_dumpcfg.add_argument(
         "--show-defaults",
         default=None,
         metavar="CANDIDATE_HEX",
@@ -716,14 +741,14 @@ def build_parser() -> argparse.ArgumentParser:
         "(same 0x7C00 address, same XTEA key) and print a per-field real-vs-default comparison "
         "— a customized field showing CHANGED is expected, not an error",
     )
-    p_dump.add_argument(
+    p_dumpcfg.add_argument(
         "--out",
         default=None,
         help="append this ESC's confirmed fields as an [ESCn] section to a partial-backup "
         "file (creates it with a not-a-real-.ixi warning header if new) — confirmed fields "
         "only, never a complete or loadable .ixi",
     )
-    p_dump.set_defaults(func=_cmd_dump_setup)
+    p_dumpcfg.set_defaults(func=_cmd_dump_config)
 
     p_probe = sub.add_parser(
         "probe-flash", help="(experimental, needs hardware) read-only sanity check of a flash address"

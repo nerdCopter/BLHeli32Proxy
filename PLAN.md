@@ -24,7 +24,7 @@ for the full architecture rationale and confirmed findings.
 - No obligation to honor BLHeli's original licensing terms for a defunct vendor — other
   manufacturers have already independently reverse-engineered and resell BLHeli32 commercially.
 - Test-firmware `.Hex` files are BLHeli's own copyrighted vendor binaries — this project never
-  bundles them. See `testcode/README.md` for how to fetch them yourself from BLHeli's official
+  bundles them. See `docs/USAGE.md` §1b for how to fetch them yourself from BLHeli's official
   GitHub history, and `AGENTS.md`'s Publishing Gate for the rule governing this material.
 
 ---
@@ -39,12 +39,11 @@ Primary research lives under `research/` in this project:
 - `research/manuals/*.txt` — official BLHeli_32 manual and changelog, extracted from the vendor
   PDFs.
 
-**Local software you need of your own** (never bundled here — see `docs/USAGE.md` §1a/§1b and
-`testcode/README.md`):
+**Local software you need of your own** (never bundled here — see `docs/USAGE.md` §1a/§1b):
 - The official `BLHeliSuite32xl` app (native Linux configurator) — your own copy, from BLHeli's
-  official distribution channels.
-- Test-firmware `.Hex` files — populate `testcode/` (or wherever `$BLHELI32PROXY_ARCHIVE_DIR`
-  points) using `testcode/README.md`'s instructions.
+  official distribution channels. Point `$BLHELI32PROXY_APP_DIR` at it.
+- Test-firmware `.Hex` files — populate its `BLHeli32_HexFiles/` subfolder (or a separate
+  `$BLHELI32PROXY_ARCHIVE_DIR`) using `docs/USAGE.md` §1b's instructions.
 
 ---
 
@@ -103,8 +102,8 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   placeholder once captured.
 - **TLS handling** — cert/key generation tooling done (`gen-cert`); the real app trusts the OS
   certificate store, confirmed live.
-- **CLI tool** — done (`serve`, `gen-cert`, `list-test-firmware`, `dump-setup`, `probe-flash`,
-  `dump-info-page`), including a partial-backup `.ixi`-style file writer (`dump-setup --out`).
+- **CLI tool** — done (`serve`, `gen-cert`, `list-test-firmware`, `dump-config`, `probe-flash`,
+  `dump-info-page`), including a partial-backup `.ixi`-style file writer (`dump-config --out`).
 - **Documentation** — `docs/USAGE.md` (day-to-day operation), `docs/knowledge/` (technical
   reference), `MENU.md` (guided task list).
 
@@ -146,7 +145,7 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   revisions; the one confirmed structural change is `Eep_Pgm_Pwm_Freq` (a single byte on 32.7,
   which only supported static PWM) splitting into `Eep_Pgm_Pwm_Frequency_Hi`/`_Lo` (two bytes) on
   firmware 32.9+, which added variable PWM. Byte *offsets* on the non-32.7 firmware are **not yet
-  confirmed** — needs a fresh `dump-setup --out` read via this project's own tool against one of
+  confirmed** — needs a fresh `dump-config --out` read via this project's own tool against one of
   those boards, since the real app's own debug logs elide the raw Setup-block payload and `.ixi`
   files only contain already-decoded values. See
   [Setup Block Fields](docs/knowledge/setup-block-fields.md) for the full method.
@@ -181,9 +180,9 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
 This project's own code/docs/research can be published following the repository owner's normal
 approval before any push, PR, or visibility change — no extra restriction beyond that.
 **Copyrighted vendor binaries are different and permanent**: see `AGENTS.md`'s Publishing Gate —
-`dumps/*.bin`/`*.hex`, `testcode/*.Hex`, and any other vendor firmware are gitignored and never
-committed or published. Each user fetches their own copy of the vendor's test firmware directly
-from BLHeli's official upstream repository (`testcode/README.md`) — this project never needs to
-redistribute it, so there is no publish decision to make about it.
+`dumps/*.bin`/`*.hex`, and any other vendor firmware in a user's own app/archive folder, are
+gitignored and never committed or published. Each user fetches their own copy of the vendor's test
+firmware directly from BLHeli's official upstream repository (`docs/USAGE.md` §1b) — this project
+never needs to redistribute it, so there is no publish decision to make about it.
 
 A `LICENSE` file is still needed before any public release and has not been added yet.

@@ -47,20 +47,22 @@ whichever item the user selects.
 
 - `research/` in this project (translations, images, manuals) — build artifacts of this project's
   own research, safe to regenerate, but treat as durable once written.
-- `testcode/` (project root) — the in-repo, gitignored default location for test-firmware `.Hex`
-  files; flat, no version subfolders needed (filenames already encode manufacturer/layout/version).
-  See `testcode/README.md` for how to populate it.
 - Whatever your own copy of the vendor configurator app lives at — executable name and folder are
   OS-specific (`BLHeliSuite32xl` on Linux, `BLHeliSuite32.exe` on Windows, `BLHeliSuite32xm.app` on
   macOS; no folder-naming convention is enforced by this project, only by whichever user set one
-  up) — and whatever test-firmware archive you point `$BLHELI32PROXY_ARCHIVE_DIR` at (see
-  `docs/USAGE.md` §1a — its simplest setting is just `testcode/` itself; a user with a broader
-  personal archive from elsewhere may point it there instead).
+  up) — pointed to via `$BLHELI32PROXY_APP_DIR` (see `docs/USAGE.md` §1a). Its own
+  `BLHeli32_HexFiles/` subfolder is the test-firmware catalog most users need — this project has no
+  in-repo `testcode/` folder of its own (removed 2026-09-07; every user fetches their own copy
+  directly into their app folder or archive, see §1b).
+- Whatever broader personal test-firmware archive you point `$BLHELI32PROXY_ARCHIVE_DIR` at, if you
+  keep one separately from the app's own folder (optional, power users only — see `docs/USAGE.md`
+  §1a).
 
 Never delete any source material, program, binary, link, folder, or file under any of the above,
 or anywhere referenced from this project — standing instruction, no exceptions.
-`BLHELI32PROXY_ARCHIVE_DIR` is a machine-specific env var — never hardcode its real value in
-project files, docs, or code; it's the user's own local path, not project data.
+`$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` are machine-specific env vars — never
+hardcode their real values in project files, docs, or code; they're the user's own local paths, not
+project data.
 
 **Never delete any source material, program, binary, link, folder, or file under any path
 above, or anywhere referenced from this project — standing instruction, no exceptions.**
@@ -103,7 +105,7 @@ above, or anywhere referenced from this project — standing instruction, no exc
   see [PLAN.md §6](PLAN.md#6-risks-open-questions-carried-forward) Risks. Public redistribution of
   the tool itself is an actual project goal. The vendor's own firmware binaries are never
   redistributed by this project — each user fetches their own copy directly from BLHeli's official
-  upstream repository (`testcode/README.md`) — see this document's own Publishing Gate section
+  upstream repository (`docs/USAGE.md` §1b) — see this document's own Publishing Gate section
   below and [PLAN.md §8](PLAN.md#8-publishing).
 - AI usage on this project is deliberately low-rate right now — prefer batching research/analysis
   work over many small back-and-forth turns, and work autonomously per the user's own stated
@@ -127,8 +129,9 @@ above, or anywhere referenced from this project — standing instruction, no exc
    technical reference base (protocol, activation/licensing, Setup-block fields, hardware
    findings) — update the relevant topic file when a new finding is confirmed, don't let it drift
    back into `PLAN.md` as an inline log.
-5. **PUBLISH** — vendor binaries (`dumps/*.bin`/`*.hex`, `testcode/*.Hex`, any other vendor
-   `.Hex`/`.bin`) are gitignored and never committed or published — a permanent rule, not a
+5. **PUBLISH** — vendor binaries (`dumps/*.bin`/`*.hex`, any other vendor `.Hex`/`.bin` a user's
+   own `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` might contain) are gitignored and
+   never committed or published — a permanent rule, not a
    case-by-case decision; see this document's own Publishing Gate section. Publishing the
    tool/codebase itself (this project's own code, docs, research) still needs the repository
    owner's explicit approval before any push, PR, or visibility change. Any future `/docs` pass or
@@ -139,13 +142,14 @@ above, or anywhere referenced from this project — standing instruction, no exc
 ## Publishing Gate — Hard Rule (vendor binaries, permanent, no exceptions)
 
 **Never commit or publish copyrighted vendor binaries** — `dumps/*.bin`/`*.hex` (official BLHeli32
-firmware extracted from hardware), `testcode/*.Hex` (official test firmware, see
-`testcode/README.md`), or any other vendor `.Hex`/`.bin` — anywhere externally reachable (a pushed
-commit, an uploaded file, or any equivalent action). This is a **permanent rule, not a
-case-by-case decision**: `.gitignore` already excludes these paths, and no approval process
-changes that. Each user fetches their own copy of the vendor's test firmware directly from
-BLHeli's official upstream repository (`testcode/README.md`) — this project never needs to
-redistribute the binaries itself, so there is no publish decision to make about them.
+firmware extracted from hardware), or any vendor `.Hex`/`.bin` in a user's own
+`$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` (official test firmware, see
+`docs/USAGE.md` §1b) — anywhere externally reachable (a pushed commit, an uploaded file, or any
+equivalent action). This is a **permanent rule, not a case-by-case decision**: `.gitignore` already
+excludes these paths, and no approval process changes that. Each user fetches their own copy of the
+vendor's test firmware directly from BLHeli's official upstream repository (`docs/USAGE.md` §1b) —
+this project never needs to redistribute the binaries itself, so there is no publish decision to
+make about them.
 
 This does **not** restrict the tool/codebase itself — this project's own original Python code,
 docs, research/translations, and the small `.ixi`/`.xlg` hardware-evidence files under
