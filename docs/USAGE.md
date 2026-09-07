@@ -209,9 +209,16 @@ manufacturer/layout/version):
   from the app's own folder (e.g. every historical version, not just what the app currently
   bundles). Checked first when both are set.
 
+A third, separate variable speeds up [§1b](#1b-obtaining-test-firmware-hex-files-from-the-official-source)'s
+`scripts/fetch-testcode.sh` only (not read by anything else):
+
+- **`BLHELI32PROXY_CLONE_DIR`** — optional, a local clone of `bitdump/BLHeli` to reuse (`git fetch`)
+  instead of recloning the whole source history on every run.
+
 ```bash
 export BLHELI32PROXY_APP_DIR=~/path/to/BLHeliSuite32xl        # most users: this alone is enough
 export BLHELI32PROXY_ARCHIVE_DIR=~/path/to/a/broader/archive  # optional, power users only
+export BLHELI32PROXY_CLONE_DIR=~/path/to/a/BLHeli/clone       # optional, speeds up fetch-testcode.sh
 ```
 
 Add whichever you use to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist it. This project
@@ -222,70 +229,85 @@ with a warning — double-check `--out` yourself in that case.
 
 ## 1b. Obtaining test-firmware `.Hex` files from the official source
 
-This project never bundles or publishes BLHeli's copyrighted vendor firmware — you fetch your own
-copy directly from BLHeli's own official GitHub history, then copy the files into whichever
-directory you set above (its `BLHeli32_HexFiles/` subfolder if using `$BLHELI32PROXY_APP_DIR`, or
-directly into `$BLHELI32PROXY_ARCHIVE_DIR` if you use that instead).
+**Prerequisite**: `$BLHELI32PROXY_APP_DIR` or `$BLHELI32PROXY_ARCHIVE_DIR` must already be set (run
+[§1a](#1a-point-the-tool-at-your-test-firmware-catalog)'s `scripts/setup-env.sh` first if not) — it
+determines where the fetched files land.
+
+**Quick path — no AI needed, plain reproducible script**:
+
+```bash
+./scripts/fetch-testcode.sh latest   # final snapshot only (~500 files, fastest)
+./scripts/fetch-testcode.sh recent   # + every 32.7.x/32.8.x version commit (~2500 files)
+./scripts/fetch-testcode.sh all      # + every version commit back to 32.31, 2018 (~4000 files)
+```
+
+This project never bundles or publishes BLHeli's copyrighted vendor firmware — the script above
+fetches your own copy directly from BLHeli's own official GitHub history and copies the files into
+whichever directory you configured (its `BLHeli32_HexFiles/` subfolder if using
+`$BLHELI32PROXY_APP_DIR`, or directly into `$BLHELI32PROXY_ARCHIVE_DIR` if you use that instead).
+Set `$BLHELI32PROXY_CLONE_DIR` (via `scripts/setup-env.sh`) to a persistent local clone of the
+source repo to skip re-cloning on every run — the script reuses it (`git fetch`) instead of
+recloning if it already exists there.
 
 **Source**: `https://github.com/bitdump/BLHeli` — the `BLHeli_32 ARM/` folder held the full
 per-manufacturer test-firmware collection until it was removed on 2024-06-04 (commit `26fbb46e41`,
 "Removed testcodes"), after the vendor shut down mid-2024. Everything below recovers those files
 from the repo's own history — nothing is bundled in this repo itself.
 
-**Option A — latest only** (smaller, faster; recommended default): the final snapshot of every
-manufacturer's most recently published test build, as of the commit right before removal
-(`9577152ca9`, 2024-05-29):
+**Why three modes**: the repo organized test firmware by dedicated version-named folder
+(`Rev32.7.1 SBUS and S.PORT testcode`, `Rev32.8.3 testcode`, etc.) from 32.31 (2018) through 32.8.3
+(2022). After that it switched to purpose-named category folders (`Loaded startup testcode`, `Misc
+testcodes`, `Dshot extended telemetry testcode`) that keep accumulating every manufacturer's newest
+build without a per-version folder — so `latest`'s single snapshot already contains every 32.9.x
+and 32.10.x file that exists, but misses the versioned 32.7.x/32.8.x (and older) folders that were
+superseded and removed from the live tree. `recent`/`all` recover those by checking out each
+version folder's introducing commit directly (via `git archive`, so this never touches the working
+tree of a reused `$BLHELI32PROXY_CLONE_DIR`). `Plane nondamped testcode` (fixed-wing-specific
+builds) is excluded from every mode — out of scope for this multirotor-focused project.
 
-```bash
-git clone --depth 1 https://github.com/bitdump/BLHeli.git /tmp/blheli-source
-cd /tmp/blheli-source
-git fetch --unshallow   # GitHub rejects fetching an arbitrary commit SHA on a shallow clone
-git checkout 9577152ca9 -- "BLHeli_32 ARM"
-find "BLHeli_32 ARM" -iname "*.Hex" -exec cp -p {} /path/to/your/destination/ \;
-```
+**Commits fetched by `recent`** (in addition to the `latest` snapshot, `9577152ca9`):
 
-Note: this snapshot's filenames may show an older version (`_32_7`, `_32_8`, etc.) if that
-manufacturer's build wasn't refreshed again before removal — not every file here is actually the
-newest version ever published for that manufacturer. Use Option B for a specific older/missing
-version.
+| Commit | Date | Version |
+|---|---|---|
+| `d33b11320491dec72239a4585b39e7bbe0ff9b3a` | 2020-05-16 | 32.7.1 |
+| `b4cc04f5779af0e7cb3918c6f10cfbfff343e89e` | 2020-08-19 | 32.7.2 |
+| `41967a136ba738198f41e53e5b473d0d38819a74` | 2020-10-25 | 32.7.3 |
+| `118d19dd86a752292d911d96c747a82286839165` | 2021-02-08 | 32.7.4 |
+| `845dd75091994ef448a8a0869c174e3ae29112db` | 2021-08-01 | 32.8.1 |
+| `653782e83a77f9135914d74a59e8337088392185` | 2021-09-26 | 32.8.2 |
+| `49948e301c47553db309c871b79d5c0689bae018` | 2022-03-30 | 32.8.3 |
 
-**Option B — all historical versions** (larger, slower): test files were added incrementally over
-2023-2024 and reorganized more than once, so the single latest snapshot doesn't necessarily contain
-every version that ever existed.
+**Additional commits fetched by `all`**:
+
+| Commit | Date | Version |
+|---|---|---|
+| `87a9039a44e4491e1ca828dd6e81ef1df9b8ebcb` | 2018-01-07 | 32.31 |
+| `871f70a42b4a2f1598891c2865cf4c26a8b837fd` | 2018-05-12 | 32.41 |
+| `9570713045d3ad6f5f729659993fea33fb914377` | 2018-06-06 | 32.42 |
+| `d389bf18fe4302f23fc58dde93bfb51944497d62` | 2018-06-14 | 32.43 |
+| `26fa7477db2e32836866b42c0101ec837bd4fcdb` | 2018-07-06 | 32.5 |
+| `482cb2cdf3cb03de37cb7c5e6cf26e00a6a1eed4` | 2018-07-12 | 32.51 |
+| `b0b26936e7f7a9f404ae6f742207b615ea68008b` | 2018-07-20 | 32.52 |
+| `d5f34b02ce8e1a71277a443e5df70eff8446a2f2` | 2018-08-21 | 32.6 |
+| `dd24d5ddfa3122f1dc11d4456da4471abf53fa52` | 2019-01-05 | 32.61 |
+| `f29edcdfc09809b864fafa471825a39237e14c14` | 2019-04-24 | 32.6.1 |
+| `dbec3853f23785fb8165c9d1bf27d8ca65c06f23` | 2019-02-10 | 32.6.3 |
+| `52b241588ee0b1fca3dce50ab3e9debd4207ff00` | 2019-06-02 | 32.6.2 |
+| `e5a180ed40ac7d6bc20e1d67a98da2aad5730968` | 2019-02-19 | 32.6.5 |
+| `4fc458c0681809182e9ad6eff08a3c28b62b6be9` | 2019-02-26 | 32.6.6 |
+| `d7dd1b948912913a21cd6e000104a3e4b32df56f` | 2019-03-14 | 32.6.7 |
+| `0c2024f4e75838b147c25ab3745b9877ce1335cd` | 2019-03-27 | 32.6.8 |
+| `f2df802066df6e23b93ae953592abde742220c32` | 2019-03-31 | 32.6.9 |
+| `4218a713c408e7f484a728b75922fa05daa68032` | 2019-09-28 | 32.6.4 |
+
+Re-derive this list yourself if you need to double check it or extend it further back:
 
 ```bash
 git clone https://github.com/bitdump/BLHeli.git /tmp/blheli-source
 cd /tmp/blheli-source
-git log --follow --diff-filter=A --name-only --pretty=format:"%h %ad %s" --date=short -- "BLHeli_32 ARM" | less
+git log --all --diff-filter=A --name-only --format="COMMIT|%H|%ad" --date=short -- "BLHeli_32 ARM" \
+  | grep -B1 -iE "Rev32|Test ?code" | less
 ```
-
-Known relevant commits, oldest first (re-verify with the command above — this repo may add more):
-
-| Commit | Date | What changed |
-|---|---|---|
-| `20c36c2695` | 2023-07-08 | Added testcode |
-| `f11ef06901` | 2023-12-10 | Added testcodes |
-| `73984a150c` | 2023-12-22 | Added testcodes |
-| `1061b23218` | 2024-01-14 | Added testcode |
-| `2a6262c5d6` | 2024-04-25 | Added HW codes |
-| `3dfbc4bf50` | 2024-04-25 | Create FLASH_HOBBY_BLHELI_32_Multi_32_7.Hex |
-| `9577152ca9` | 2024-05-29 | Last commit before removal (Option A's snapshot) |
-| `26fbb46e41` | 2024-06-04 | **Removed testcodes** — everything gone after this |
-
-Check out each commit of interest into a distinctly-named subdirectory so snapshots don't collide:
-
-```bash
-mkdir -p /tmp/blheli-source/by-commit
-for c in 20c36c2695 f11ef06901 73984a150c 1061b23218 2a6262c5d6 3dfbc4bf50 9577152ca9; do
-  git -C /tmp/blheli-source checkout "$c" -- "BLHeli_32 ARM"
-  mkdir -p "/tmp/blheli-source/by-commit/$c"
-  find "/tmp/blheli-source/BLHeli_32 ARM" -iname "*.Hex" -exec cp -p {} "/tmp/blheli-source/by-commit/$c/" \;
-done
-```
-
-Then copy whichever specific files you actually need (by manufacturer/layout/version in the
-filename) from `by-commit/<commit>/` into your destination — don't copy everything from every
-commit, since later snapshots mostly superset earlier ones.
 
 **Verifying it worked**:
 
@@ -293,11 +315,11 @@ commit, since later snapshots mostly superset earlier ones.
 blheli32proxy list-test-firmware   # uses whichever env var you set above
 ```
 
-**For an AI assistant automating this**: confirm Option A vs B with the user if unstated; run the
-clone/checkout commands directly (read-only against upstream, a fresh temp clone each time); copy
-only `.Hex` files, never other file types (manuals, `.apk`, specs) unless separately asked; report
-the count copied and confirm with `list-test-firmware`; never commit the copied `.Hex` files to
-this project's own repo (see the Publishing Gate in `AGENTS.md`).
+**For an AI assistant automating this**: confirm `latest`/`recent`/`all` with the user if
+unstated (`latest` is the safe default); run `scripts/fetch-testcode.sh` directly rather than the
+manual commands above — it is the reproducible, no-AI-needed path; report the file count it prints;
+never commit the copied `.Hex` files to this project's own repo (see the Publishing Gate in
+`AGENTS.md`).
 
 ## 2. Generate a TLS certificate (needed if the real activation call is HTTPS, which is likely)
 

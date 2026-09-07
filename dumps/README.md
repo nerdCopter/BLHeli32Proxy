@@ -1,7 +1,7 @@
 # dumps/
 
 Local storage for firmware/config binaries extracted **by this project's own tooling**
-(`probe-flash`, `dump-info-page`, `dump-setup` — see `docs/USAGE.md` §6/§6b) from your own ESC
+(`probe-flash`, `dump-info-page`, `dump-config` — see `docs/USAGE.md` §6/§6b) from your own ESC
 hardware. Distinct from `$BLHELI32PROXY_ARCHIVE_DIR` (the separate, pre-existing, read-only archive
 — see `docs/USAGE.md` §1a; that directory is never written to or deleted from by this project,
 under any circumstance).

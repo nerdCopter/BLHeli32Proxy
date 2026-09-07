@@ -18,14 +18,17 @@ app both need, from BLHeli's own official GitHub history (nothing is bundled in 
 destination `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` you have set (see `docs/USAGE.md`
 §1a).
 
-- **Latest only** (default, faster): one snapshot covering every manufacturer's most recent
+- **`latest`** (default, fastest): one snapshot covering every manufacturer's most recent
   published build.
-- **All historical versions** (slower): every version ever published, for when you need a specific
-  older build a manufacturer hasn't re-published since.
+- **`recent`**: `latest` plus every 32.7.x/32.8.x version, for when you need a specific older build
+  a manufacturer hasn't re-published since.
+- **`all`**: `recent` plus every version back to 2018 (32.31 onward) — the full historical record.
 
-**AI-actionable**: read `docs/USAGE.md` §1b and follow Option A or B exactly as written there —
-ask the user which one if they haven't said, then run the commands and report the file count
-copied in.
+**AI-actionable**: run `./scripts/fetch-testcode.sh latest` (or `recent`/`all`) — ask the user which
+one if they haven't said. This is a plain, reproducible script, not something that needs AI to
+execute step by step; report the file count it prints when done. Requires `$BLHELI32PROXY_APP_DIR`
+or `$BLHELI32PROXY_ARCHIVE_DIR` to already be set (`./scripts/setup-env.sh` if not) — see
+`docs/USAGE.md` §1a/§1b.
 
 ## 2. Environment prerequisites (OS-level software, per platform)
 

@@ -50,4 +50,22 @@ else
 fi
 
 echo
+echo "=== BLHELI32PROXY_CLONE_DIR (optional, speeds up scripts/fetch-testcode.sh) ==="
+if [ -n "$BLHELI32PROXY_CLONE_DIR" ]; then
+    echo "  already set: $BLHELI32PROXY_CLONE_DIR"
+else
+    echo "  A local clone of bitdump/BLHeli here lets fetch-testcode.sh reuse it (git fetch)"
+    echo "  instead of re-cloning the whole history every run. Skip to clone into a throwaway"
+    echo "  temp folder each time instead."
+    read -r -p "  Do you already have a clone, or want one kept here? [y/N] " answer
+    if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+        read -r -p "  Enter the full path: " clone_dir
+        clone_dir="${clone_dir/#\~/$HOME}"
+        persist BLHELI32PROXY_CLONE_DIR "$clone_dir"
+    else
+        echo "  Skipped — fetch-testcode.sh will clone to a temp folder and discard it each run."
+    fi
+fi
+
+echo
 echo "Done. Restart your shell (or 'source $RC_FILE') for other terminals to pick this up."
