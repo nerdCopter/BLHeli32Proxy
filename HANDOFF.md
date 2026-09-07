@@ -68,9 +68,13 @@ into permanent docs.
    app found no additional format hints; next step is either live experimentation (vary the
    server's response body against real hardware and watch for a behavior change) or real
    disassembly. **Do this on the bench AK32** (no VTX heat pressure), per user instruction.
-2. `write_flash()`/`page_erase()` need real-hardware testing before they're trustworthy — start
-   with a single small write attempt at a safe, non-bootloader address, with the user's fresh
-   explicit confirmation of the firmware-loss risk (standing rule, no exceptions).
+2. **Done (2026-09-07)**: `write_flash()` tested on real hardware (AK32 motor 0 Setup block,
+   confirmed explicit consent each step). Confirmed finding: writing without erasing first can
+   silently corrupt a much larger region than the bytes given (an 8-byte write left the rest of the
+   256-byte Setup block at erased sentinel values) — see
+   `docs/knowledge/hardware-findings.md`'s "`write_flash()` without erase-first" section for the
+   full incident and the confirmed repair (write the complete structure in one call). `page_erase()`
+   still untested against real hardware.
 3. `enter_4way_if()` has zero retry logic (unlike `connect_esc()`'s 3-attempt/5.5s-delay design) —
    today's session hit several `enter_4way_if` failures that a retry loop (matching
    BLHeliSuite32xl's own 5-attempt default, 1–10 user-configurable) would likely absorb.

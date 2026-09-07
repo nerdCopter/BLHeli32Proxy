@@ -15,6 +15,7 @@ flowchart TD
     G1 --> G1b[✅ 13 named fields decoded, match real .ixi]
     G1 --> G1c[⬜ Remaining ~26 fields: no public source]
     G1 --> G1d[⬜ No .ixi-style file writer yet]
+    G1 --> G1e[✅ Write-back tested: full-block-copy repair confirmed working]
 
     G2 --> G2a[❌ Blocked: STM32 RDP protection, confirmed]
     G2 --> G2b[❓ verify-oracle explored, inconclusive]
@@ -39,7 +40,15 @@ flowchart TD
 - Wired into CLI (`dump-config`/`probe-flash`/`dump-info-page`).
 - Not done: the remaining ~26 fields (no public source — BLHeli_32 is closed-source); a dedicated
   backup-file writer that produces a `.ixi`-style multi-`[ESCn]` file (currently prints to stdout
-  only); any write-back/restore path (deliberately deferred until fields are fully confirmed).
+  only).
+- **Write-back tested on real hardware (2026-09-07)** — see
+  [Hardware Findings](hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07).
+  Confirmed: a partial write (fewer than the full 256 bytes) without erasing first can silently
+  corrupt the rest of the Setup block. Confirmed safe pattern instead: write the complete 256-byte
+  block in one call — proven as a real repair, copying one ESC's known-good block onto another's
+  corrupted one. No general-purpose "change just this one field" write path exists yet; would need
+  either an erase-then-full-rewrite sequence, or the same full-block-copy pattern with the target
+  field edited in the source plaintext before re-encrypting.
 
 ## 2. Firmware dumps — closed, blocked
 
@@ -67,3 +76,30 @@ flowchart TD
   of this project — needs a real flash/activate attempt through BLHeliSuite32xl. See
   [Activation & Licensing](activation-licensing.md).
 - TLS trust question untested (does the app trust the OS cert store, or pin BLHeli's cert?).
+- **Still not a way to flash test firmware** (2026-09-07): the Setup-block write-back tested this
+  session (Goal 1, above) never touches the application-firmware region and doesn't advance this
+  goal. A real "Flash Selected ESC" attempt through the vendor app with this project's placeholder
+  approval server (2026-09-06) showed `cmd_DeviceInitFlash` → `cmd_DeviceVerify` → `cmd_DeviceReset`
+  only — no `cmd_DeviceWrite` — meaning the app silently declines to write firmware even when the
+  known `status.php` ping is answered. Attempting to flash firmware directly via this project's own
+  `write_flash()` (bypassing the vendor app and its licensing gate entirely) is not recommended:
+  this session confirmed a partial write can corrupt far more than intended, and unlike the small
+  recoverable Setup block, application firmware has no backup path (RDP blocks firmware dumps, see
+  Goal 2) — a bad write there would be unrecoverable.
+- **Licensing is not actually the blocker for this project's own tooling** (clarified 2026-09-07):
+  the ESC bootloader itself enforces no activation check on writes at all — confirmed already
+  (`activation-licensing.md`: "BLHeli's bootloader writes unconditionally regardless of
+  source/target version"). The licensing gate lives entirely in the vendor app's own `TFlashState`
+  UI logic, which this project's scripts never go through (`cmd_DeviceWrite` is called directly via
+  4-way-if). So a real firmware write via this project's own tooling would not be blocked by
+  licensing — it is technically possible, not just risky-because-unlicensed.
+- **Why a real firmware write is still not attempted, capability aside**: (1) `page_erase()` has
+  never been tested against real hardware at all; (2) the confirmed corrupts-more-than-requested
+  finding above was only demonstrated on the small 256-byte Setup/info page, which may be
+  EEPROM-emulation-style flash with different write semantics than the actual multi-page
+  application-code flash sectors — that difference is unconfirmed either way; (3) unlike the
+  Setup-block repair (an identical sibling ESC existed to copy from), no backup of the current
+  firmware exists or can exist (RDP blocks dumps) — a bad write here has no recovery path. This
+  is the same "real, irreversible risk" the backlog's Goal 4 item already flags, now with a
+  concrete demonstrated example (this session's Setup-block corruption) rather than a theoretical
+  concern.

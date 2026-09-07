@@ -171,6 +171,84 @@ later patches can accumulate changes toward the *next* major version, making the
 their own line's earlier patches than the version numbers alone would suggest. Saved:
 `dumps/BLHeli32_Furling32_4in1_C - Rev. 32.9.5 - AppCode_260906.bin`/`.hex`.
 
+## `write_flash()` without erase-first corrupts far more than the targeted bytes (2026-09-07)
+
+**First real write to hardware via this project's own `write_flash()`.** Test: change
+`Eep_Pgm_Pwm_Freq` (Setup block, plaintext offset 5) from 48 to 24 on AK32 motor 0 (ESC1), writing
+only the single 8-byte ciphertext block covering that offset, deliberately **without erasing
+first** — the intended test of whether erase-before-write is required. Full raw output, exact
+field-by-field before/after comparison:
+[ak32-motor0-writetest-260907.txt](ak32-motor0-writetest-260907.txt).
+
+**The targeted byte wrote correctly** (`Eep_Pgm_Pwm_Freq` read back as 24, confirmed via this
+project's own decrypt), but **8 other confirmed fields outside the written 8 bytes were also
+clobbered** to erased-flash sentinel values (`Eep_Pgm_Comm_Timing`, `Demag_Comp`,
+`Ppm_Min/Center/Max_Throttle`, `Enable_Throttle_Cal`, `Temp_Prot_Enable`, `Beep_Strength`,
+`Beacon_Strength`, `Beacon_Delay` — all now `255`/`65535`/`0` instead of their real prior values).
+**Root cause (inferred, not directly confirmed)**: the MCU/bootloader's write path silently erases
+a region larger than the 8 bytes requested (likely a full flash page) before programming — directly
+contradicting the assumption that a small `cmd_DeviceWrite` only touches the bytes it's given.
+
+**Independently confirmed by the real app**: opening `BLHeliSuite32xl` afterward (same AK32, same
+connection) showed ESC#1 as `***[INVALID]**` (ESC#2-4 unaffected, normal), with a built-in dialog:
+"Now the memory content is most likely corrupted, so do not try to use this ESC. Do you want to try
+to flash ESC#1 again with BLHeli, to remedy the failure?" — the app has its own repair-via-reflash
+workflow for exactly this failure mode. The literal `***INVALID***` string the app displays matches
+byte-for-byte a string found in this project's own raw plaintext readback — confirms this project's
+read path reflects genuine device memory, not a decode artifact. DShot communication with ESC1 still
+worked normally (1.14M+ good frames, zero bad) — only the Setup/config block is affected, not the
+running application firmware or motor control.
+
+**Practical implications**:
+- Answers the original "does config-area write need erase-first?" question empirically: **yes** —
+  and the failure mode when skipped is not a clean no-op or a single-byte miss, it's collateral
+  corruption of a much larger region.
+- This project's own tooling cannot fully repair this: the confirmed byte-offset map (see
+  [Setup Block Fields](setup-block-fields.md)) only covers plaintext offsets 0-23, but the erased
+  region extends across the whole 192-byte plaintext (verified: legible strings like
+  `Aikon_AK32_4IN1_35A_6S_V1_0` and `BLHeli_32*STM32F051x6` persist further out, meaning the erase
+  didn't wipe literally everything, but the fields this project can decode/restore are limited to
+  that 24-byte range regardless). The real app's own "flash again to remedy" repair path is the
+  safer recovery route — it has complete internal knowledge of the true struct layout.
+- `write_flash()`'s docstring updated accordingly (see `protocol/fourwayif.py`) — no longer just
+  "not yet confirmed", now documents this specific confirmed failure mode.
+
+**Status: repaired, confirmed working.** BLHeliSuite32xl's own "flash again to remedy" dialog
+failed with "cannot access server" — expected: no local approval server was running this session,
+so the `/etc/hosts` redirect (already in place from an earlier session) sent the request to
+localhost with nothing listening, connection refused. Not a deeper protocol failure — no
+request/response cycle even occurred.
+
+After that failed attempt, the app reported ESC#2 and ESC#4 (motor indices 1 and 3) as unreachable
+too, surviving a full power cycle. **Read-only diagnostic via this project's own tooling (enter
+4-way-if + connect_esc fresh per motor) showed all 4 motors connect fine at the protocol level with
+identical valid device signatures, and motors 1/2/3's Setup blocks were completely intact,
+byte-for-byte matching the known-good baseline.** Only motor 0 (ESC#1) was actually corrupted — the
+app's "cannot access" for the other two was a UI-layer symptom, not real hardware/protocol failure,
+consistent with the already-documented dropdown-population UI bug pattern above (Furling32/FOXEER
+Reaper findings) where one bad ESC's state cascades into the app misreporting others.
+
+**Repair performed**: motors 0-3 on this board share an identical Setup block except
+`Eep_Pgm_Direction` (offset 3) — confirmed already in [Setup Block Fields](setup-block-fields.md).
+Motor 3's `Direction=1` already matched motor 0's original value, so no field edit was needed: read
+motor 3's full 256-byte ciphertext, verified the crypto round-trips it exactly (local check before
+touching hardware), then wrote all 256 bytes to motor 0 in a single `cmd_DeviceWrite` frame (vs. the
+original 8-byte write that left the rest of the page erased). **Confirmed working**: motor 0's full
+192-byte plaintext now reads back byte-for-byte identical to motor 3's, and the real
+`BLHeliSuite32xl` app confirms all 4 ESCs healthy again (ESC#1 back to `[MASTER]`, direction pattern
+`1,2,2,1` intact, matching original state).
+
+**New finding — supports the unverified "nonce theory" in `cipher/xtea.py`**: the write used
+motor 3's real recovered "discarded low-16-bits" per block (not the zero-default), and the local
+round-trip check confirmed this reproduced motor 3's exact ciphertext before sending. But after
+writing to motor 0 and reading it back, the raw ciphertext differed from motor 3's in nearly every
+byte — while the decrypted plaintext remained exactly identical. Since XTEA's block cipher makes
+even a 1-bit change in those "discarded" bits cascade into an almost fully different 8-byte
+ciphertext block (confirmed avalanche behavior), this strongly suggests **the device regenerates
+those discarded bits itself on every write** (a real per-write nonce, counter, or similar) rather
+than storing whatever raw value is supplied — new evidence for, not proof of, the nonce theory
+`xtea.py` already flags as unverified.
+
 ## Firmware-dump blocker: RDP
 
 Mapped the readable address range via `cmd_DeviceRead` against the real ESC. **Refused everywhere

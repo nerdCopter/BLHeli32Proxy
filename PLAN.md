@@ -123,6 +123,12 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   depends on it.
 - The real activation request/response wire format is unknown — the approval server is built
   against a placeholder schema; expect revision once real traffic is captured.
+- **Confirmed real risk (2026-09-07)**: `write_flash()` without erasing first can silently corrupt
+  a much larger flash region than the bytes written, not just the targeted bytes — see
+  [Hardware Findings](docs/knowledge/hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07).
+  Confirmed recoverable for the small Setup block (full-block-copy repair from a known-good sibling
+  ESC), but application firmware has no equivalent backup path since RDP blocks firmware dumps —
+  raises the real stakes of Goal 4's "Flash Selected ESC" step from theoretical to demonstrated.
 
 ---
 

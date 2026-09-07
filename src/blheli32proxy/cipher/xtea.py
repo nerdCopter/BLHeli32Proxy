@@ -136,6 +136,15 @@ def encrypt_setup_block(
     real ESC/configurator behavior (see BLHeliSuite32-Reverse2.en.md's nonce
     theory, still unverified) — only use a real captured value if bit-exact
     output matters.
+
+    New evidence for the nonce theory (2026-09-07, real hardware, see
+    docs/knowledge/hardware-findings.md): writing one ESC's real recovered
+    discarded-low-words to another ESC (verified round-tripping to the exact
+    source ciphertext locally before sending) produced a readback ciphertext
+    that differed from the source in nearly every byte, while the decrypted
+    plaintext stayed exactly identical — consistent with the device
+    regenerating these bits itself on every write rather than storing
+    whatever value is supplied. Still not proof, but a real data point.
     """
     if len(plaintext) != PLAINTEXT_SIZE:
         raise ValueError(f"plaintext must be {PLAINTEXT_SIZE} bytes, got {len(plaintext)}")

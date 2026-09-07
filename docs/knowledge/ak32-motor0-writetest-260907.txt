@@ -1,0 +1,92 @@
+AK32 motor 0 (ESC1) config-block write test, 2026-09-07
+=========================================================
+
+Goal: change Eep_Pgm_Pwm_Freq (plaintext offset 5) from 48 to 24, writing only
+the single 8-byte ciphertext block covering that offset, WITHOUT erasing
+first -- the deliberate test of whether erase-before-write is required.
+
+Known-good state before this test (matches Sep 4 and Sep 6 official .ixi
+backups exactly, all 4 ESCs):
+  Eep_Pgm_Direction=1              Eep_Pgm_Enable_Throttle_Cal=1
+  Eep_Pgm_Rampup_Pwr=50            Eep_Pgm_Temp_Prot_Enable=140
+  Eep_Pgm_Pwm_Freq=48              Eep_Pgm_Beep_Strength=40
+  Eep_Pgm_Comm_Timing=0            Eep_Pgm_Beacon_Strength=70
+  Eep_Pgm_Demag_Comp=2             Eep_Pgm_Beacon_Delay=600
+  Eep_Pgm_Ppm_Min_Throttle=1014
+  Eep_Pgm_Ppm_Center_Throttle=1500
+  Eep_Pgm_Ppm_Max_Throttle=1985
+
+Dry run (read-only, local crypto check, no hardware write):
+  Entered 4-way-if, FC reports 4 ESC(s)
+  ESC 0: device signature 06336804
+  Current Eep_Pgm_Pwm_Freq=48
+  Current plaintext[5]=48
+  Local round-trip OK: new block 0 would decrypt to plaintext[5]=24
+  New block 0 ciphertext: 68167166a184cc5c
+  Old block 0 ciphertext: 90a4008ac30f4e9f
+
+Real write (--write, no erase first):
+  Entered 4-way-if, FC reports 4 ESC(s)
+  ESC 0: device signature 06336804
+  Current Eep_Pgm_Pwm_Freq=48
+  Current plaintext[5]=48
+  Local round-trip OK: new block 0 would decrypt to plaintext[5]=24
+  New block 0 ciphertext: f517e04469ec5e3f
+  Old block 0 ciphertext: 7600750fab78d6e4
+  Writing new block 0 to 0x7c00 (NO erase first)...
+  Readback Eep_Pgm_Pwm_Freq=24
+  Readback plaintext[5]=24
+  Readback block 0 ciphertext: c55499e3cc78508d
+  RESULT: write succeeded without erase -- landed on target 24.
+
+Full field readback immediately after (via dump-config --motor-index 0),
+raw 192-byte plaintext hex -- transcribed from this session's tool output;
+port is currently held by the user's own BLHeliSuite32xl session so this
+could not be independently re-read live to double check:
+  20462c013218ffffffffffffffffffffffffffff0000ffffffffffffffffffffffffffffffffffffffffffffffffffff00ff00000000ffffffffffffffffffff2341696b6f6e5f414b33325f34494e315f3335415f36535f56315f302320202023424c48656c695f33322a53544d3332463035317836232020202020202020202a2a2a2a2a494e56414c49442a2a2a2affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+Decoded confirmed fields from that readback:
+  Eep_Pgm_Direction=1              (unchanged -- correct)
+  Eep_Pgm_Rampup_Pwr=50            (unchanged -- correct)
+  Eep_Pgm_Pwm_Freq=24              (intended change -- correct)
+  Eep_Pgm_Comm_Timing=255          (CORRUPTED, was 0)
+  Eep_Pgm_Demag_Comp=255           (CORRUPTED, was 2)
+  Eep_Pgm_Ppm_Min_Throttle=65535   (CORRUPTED, was 1014)
+  Eep_Pgm_Ppm_Center_Throttle=65535 (CORRUPTED, was 1500)
+  Eep_Pgm_Ppm_Max_Throttle=65535   (CORRUPTED, was 1985)
+  Eep_Pgm_Enable_Throttle_Cal=255  (CORRUPTED, was 1)
+  Eep_Pgm_Temp_Prot_Enable=255     (CORRUPTED, was 140)
+  Eep_Pgm_Beep_Strength=0          (CORRUPTED, was 40)
+  Eep_Pgm_Beacon_Strength=0        (CORRUPTED, was 70)
+  Eep_Pgm_Beacon_Delay=65535       (CORRUPTED, was 600)
+
+The plaintext also contains a literal ASCII string starting around byte 60:
+  "#Aikon_AK32_4IN1_35A_6S_V1_0#   #BLHeli_32*STM32F051x6#     *****INVALID*****"
+
+Real BLHeliSuite32xl app confirmation (user opened the app after this test,
+same AK32, same USB connection):
+
+  Found Multiple ESC configuration:
+
+  ESC# 1 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+  ***[INVALID]**
+  (BLHeli32 Bootloader h)
+  Input Protocol: DShot
+  Input Frames Good: 1144381 / Bad: 0
+
+  ESC# 2 : Aikon_AK32_4IN1_35A_6S_V1_0 - Rev. 32.7 - Multi
+  [MASTER]
+  ...(ESC 2-4 unaffected, normal)...
+
+  Follow-up dialog:
+  "Obviously an attempt to flash ESC#1 has failed.
+  Now the memory content is most likely corrupted, so do not try to use this ESC.
+  Do you want to try to flash ESC#1 again with BLHeli, to remedy the failure?"
+  [Yes] [No]
+
+The app's own "[INVALID]" marker matches the literal "*****INVALID*****" text
+found in our raw plaintext readback byte-for-byte -- confirms this project's
+read path is reading genuine device memory content, not a decode artifact.
+The app also confirms DShot communication with ESC1 still works (1.14M+ good
+frames) -- only the Setup/config block is affected, not the running
+application firmware or motor control.

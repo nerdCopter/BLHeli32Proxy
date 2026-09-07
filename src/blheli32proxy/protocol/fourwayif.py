@@ -293,10 +293,20 @@ def write_flash(transport, addr: int, data: bytes, timeout: float = 5.0, *,
     """Write up to 256 bytes starting at `addr` to the currently-connected
     ESC (call connect_esc() first). Caller is responsible for erasing the
     covering page(s) first via page_erase() — this function only writes.
-    NOT YET CONFIRMED against real hardware — the real BLHeliSuite32xl app
-    never issues cmd_DeviceWrite at all in practice (see
-    docs/knowledge/activation-licensing.md), for reasons traced to its own
-    internal TFlashState logic, not the ESC bootloader itself.
+
+    CONFIRMED against real hardware (2026-09-07, AK32, see
+    docs/knowledge/hardware-findings.md): writing WITHOUT erasing first can
+    silently corrupt a much larger region than the bytes given — a partial
+    (8-byte) write of the 256-byte Setup block left the rest of that block
+    at erased-flash sentinel values, consistent with an internal erase of a
+    larger region (likely a full page) happening before the requested bytes
+    are programmed. Confirmed repair strategy: write the COMPLETE structure
+    (e.g. all 256 bytes of a Setup block) in one call rather than a partial
+    range, so any such internal erase gets fully re-filled with valid data.
+    The real BLHeliSuite32xl app never issues cmd_DeviceWrite at all in
+    practice (see docs/knowledge/activation-licensing.md), for reasons
+    traced to its own internal TFlashState logic, not the ESC bootloader
+    itself — so this path has no vendor-app precedent to compare against.
 
     `bootloader_end` defaults to the value confirmed for the STM32F0-family
     BLHeli32 ESCs tested so far — a different ESC's MCU family may have its
