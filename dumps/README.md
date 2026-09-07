@@ -27,3 +27,16 @@ routinely, not just before a risky experiment.
 is this project's own extraction from the user's own owned hardware, not a vendor-released binary
 — the same category as the `.ixi`/`.xlg` files under `docs/knowledge/`. Fine to commit and publish
 like any other file in this repo, following the same approval process as any push.
+
+**Not every capture gets committed.** A single differential-capture session (see
+`docs/knowledge/setup-block-fields.md`'s method) can produce many timestamped
+`esc<N>-setup-<timestamp>.bin` files in quick succession — one per settings change tested. Commit
+only the ones that carry lasting evidentiary value (the final state of a session, or a capture a
+doc specifically cites); leave the rest untracked locally, or move them out of the repo entirely
+into `$BLHELI32PROXY_ARCHIVE_DIR`'s own backup folder (e.g. its `ini-xlg-backups/` subfolder,
+alongside the `.ixi`/`.xlg` files already kept there) so the repo's untracked-file list doesn't
+accumulate clutter session over session. That's a manual, one-off action the repository owner
+directs explicitly each time — not something this project's own tooling ever does automatically
+(the "never write into `$BLHELI32PROXY_ARCHIVE_DIR`" rule above still describes this project's own
+automated behavior; a human deliberately organizing their own archive is a different action from
+the tool silently writing there).
