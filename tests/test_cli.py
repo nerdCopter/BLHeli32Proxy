@@ -7,9 +7,13 @@ from blheli32proxy import cli
 
 # same real confirmed-field values as tests/test_setup_fields.py's EXPECTED_ESC0
 REAL_ESC0_FIELDS = {
+    "Eep_FW_Main_Revision": 32,
+    "Eep_FW_Sub_Revision": 70,
+    "Eep_Layout_Revision": 44,
     "Eep_Pgm_Direction": 1,
     "Eep_Pgm_Rampup_Pwr": 50,
     "Eep_Pgm_Pwm_Freq": 48,
+    "Eep_Pgm_Pwm_Frequency_Lo": 48,
     "Eep_Pgm_Comm_Timing": 0,
     "Eep_Pgm_Demag_Comp": 2,
     "Eep_Pgm_Ppm_Min_Throttle": 1014,
@@ -34,6 +38,17 @@ REAL_ESC0_FIELDS = {
     "Eep_Pgm_Stall_Prot": 1,
     "Eep_Pgm_SBUS_Channel": 255,
     "Eep_Pgm_SPORT_Physical_ID": 255,
+    "Eep_Pgm_Pwm_Frequency_Hi": 255,
+    "Eep_Hw_Voltage_Sense_Capable": 0,
+    "Eep_Hw_Current_Sense_Capable": 255,
+    "Eep_Hw_LED_Capable_0": 0,
+    "Eep_Hw_LED_Capable_1": 0,
+    "Eep_Hw_LED_Capable_2": 0,
+    "Eep_Hw_LED_Capable_3": 0,
+    "Eep_Hw_Pwm_Freq_Min": 255,
+    "Eep_Hw_Pwm_Freq_Max": 255,
+    "Eep_SPORT_Capable": 255,
+    "Eep_Nondamped_Capable": 1,
 }
 
 

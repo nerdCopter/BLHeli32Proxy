@@ -62,11 +62,12 @@ value (80 = 0x50) for the original state. This is strong confirmation that the r
 *is* the `.ixi` file's own on-disk representation for at least this field, not just a convenience
 this module invented.
 
-## Confirmed fields (`protocol/setup_fields.py`) — 28 of 46 known `.ixi` field names (27 int-valued
+## Confirmed fields (`protocol/setup_fields.py`) — 43 of 46 known `.ixi` field names (42 int-valued
 in `CONFIRMED_FIELDS`, plus `Eep_Name` decoded separately — see below; 46 = the union of AK32's 38
 and Furling32's 45 real `.ixi` field names — see the cross-version section for the precise count
 and the one field, `Eep_Pgm_Pwm_Frequency_Lo`, that's really the same already-confirmed byte as
-`Eep_Pgm_Pwm_Freq` under a different name)
+`Eep_Pgm_Pwm_Freq` under a different name). Only 3 field names remain unconfirmed as of
+2026-09-08: `Eep_Note_Array`, `Eep_ESC_Layout`, `Eep_ESC_Mode` — see "What's NOT decoded" below.
 
 | Offset | Width | Field | Confirmed value (AK32 baseline) | Confirmed 2026-09-07 |
 |---|---|---|---|---|
@@ -97,6 +98,21 @@ and the one field, `Eep_Pgm_Pwm_Frequency_Lo`, that's really the same already-co
 | 31 | 1 | `Eep_Pgm_Stall_Prot` | 1 | ✅ 2 states on this firmware |
 | 32 | 1 | `Eep_Pgm_SBUS_Channel` | 255 (AK32 has no SBUS support) | ✅ raw channel number, cross-version |
 | 33 | 1 | `Eep_Pgm_SPORT_Physical_ID` | 255 (AK32 has no S.PORT support) | ✅ raw ID, cross-version |
+| 0 | 1 | `Eep_FW_Main_Revision` | 32 | ✅ 2026-09-08, cross-board correlation |
+| 1 | 1 | `Eep_FW_Sub_Revision` | 70 | ✅ 2026-09-08, cross-board correlation |
+| 2 | 1 | `Eep_Layout_Revision` | 44 | ✅ 2026-09-08, cross-board correlation |
+| 5 | 1 | `Eep_Pgm_Pwm_Frequency_Lo` | 48 | ✅ 2026-09-08, same byte as `Eep_Pgm_Pwm_Freq`, new name only |
+| 34 | 1 | `Eep_Pgm_Pwm_Frequency_Hi` | 255 (AK32 has no dual-PWM firmware) | ✅ 2026-09-08, real differential test |
+| 48 | 1 | `Eep_Hw_Voltage_Sense_Capable` | 0 | ✅ 2026-09-08, cross-board correlation |
+| 49 | 1 | `Eep_Hw_Current_Sense_Capable` | 255 | ✅ 2026-09-08, cross-board correlation |
+| 50 | 1 | `Eep_Hw_LED_Capable_0` | 0 | ✅ 2026-09-08, cross-board correlation |
+| 51 | 1 | `Eep_Hw_LED_Capable_1` | 0 | ✅ 2026-09-08, cross-board correlation |
+| 52 | 1 | `Eep_Hw_LED_Capable_2` | 0 | ✅ 2026-09-08, cross-board correlation |
+| 53 | 1 | `Eep_Hw_LED_Capable_3` | 0 | ✅ 2026-09-08, cross-board correlation |
+| 54 | 1 | `Eep_Hw_Pwm_Freq_Min` | 255 | ✅ 2026-09-08, cross-board correlation |
+| 55 | 1 | `Eep_Hw_Pwm_Freq_Max` | 255 | ✅ 2026-09-08, cross-board correlation |
+| 62 | 1 | `Eep_SPORT_Capable` | 255 | ✅ 2026-09-08, cross-board correlation |
+| 63 | 1 | `Eep_Nondamped_Capable` | 1 | ✅ 2026-09-08, cross-board correlation |
 
 `Eep_Pgm_Curr_Prot`, `Eep_Pgm_Curr_Sense_Cal`, `Eep_Pgm_LED_Control`, `Eep_Pgm_SBUS_Channel`, and
 `Eep_Pgm_SPORT_Physical_ID` don't appear in AK32's own real `.ixi` export at all (it lacks
@@ -238,6 +254,55 @@ deliberately lock this checkbox while connected as a safety/consistency gate, on
 flag to be set as part of a full offline profile edit. Not verified against source or a captured
 network/serial trace — flag for whoever revisits this, don't treat as settled.
 
+## Cross-version validation: damaged FOXEER Reaper, AT32F421 (2026-09-08) — third MCU vendor, 2 more fields via differential test
+
+Connected a third distinct MCU vendor (Artery Technology's AT32F421, after ST's STM32 and
+GigaDevice's GD32) — a damaged FOXEER Reaper4IN1, firmware 32.10.0. All 22 fields confirmed on
+AK32/Furling32 held exactly on this board too (see `hardware-findings.md`'s "damaged unit"
+section for the full account). Changed "PWM Frequency High" from 128 kHz to 48 kHz via the real
+app's ESC Setup tab on ESC1 (motor_index 0), Write Setup, diffed the raw plaintext against a
+pre-change backup: exactly one byte changed.
+
+- **offset 34: `128`→`48`** — `Eep_Pgm_Pwm_Frequency_Hi`, literal kHz value, same encoding as
+  `_Lo` (offset 5). A genuinely new offset, not previously located.
+
+`Eep_Pgm_Pwm_Frequency_Lo` (the real `.ixi`'s 32.9+ name for offset 5) is added to
+`CONFIRMED_FIELDS` as a second dict entry for that same offset — the pre-existing AK32-only
+`Eep_Pgm_Pwm_Freq` entry is untouched, per this project's standing instruction to never overwrite
+a working version-specific mapping when extending to a new firmware version. Both names now
+decode from the same byte; `dump-config` emits both.
+
+## Method — 12 more fields via cross-board value correlation (2026-09-08)
+
+**A third confirmation method, distinct from differential capture and direct real-`.ixi` value
+matching**: with 3 independent real boards' raw plaintext AND their real `.ixi` values already on
+hand (AK32, Furling32, the damaged Reaper), searched every offset 0-191 for a byte pattern
+matching each remaining unconfirmed field's known per-board `.ixi` value, simultaneously across
+all 3 boards. No new hardware interaction needed — pure analysis of already-captured data.
+
+**7 fields resolved by a unique, unambiguous 3-way match** (exactly one offset out of 192 matched
+all 3 boards' values simultaneously): `Eep_FW_Sub_Revision` (offset 1), `Eep_Layout_Revision` (2),
+`Eep_Hw_LED_Capable_0/1/2` (50/51/52), `Eep_Hw_Pwm_Freq_Min/Max` (54/55).
+
+**6 more resolved by elimination plus sequential-position corroboration**: `Eep_FW_Main_Revision`
+(offset 0), `Eep_Hw_Voltage_Sense_Capable` (48), `Eep_Hw_Current_Sense_Capable` (49),
+`Eep_Hw_LED_Capable_3` (53), `Eep_SPORT_Capable` (62), `Eep_Nondamped_Capable` (63) each had
+multiple raw candidate offsets individually; eliminating any offset already assigned to a
+different confirmed field left exactly one candidate in every case. Every resolved offset also
+lands in a clean, unbroken sequential run matching the real `.ixi`'s own declared field order
+exactly (`FW_Main_Revision, FW_Sub_Revision, Layout_Revision` at 0-2; `Hw_Voltage_Sense_Capable`
+through `Hw_Pwm_Freq_Max` at 48-55; `SPORT_Capable, Nondamped_Capable` at 62-63) — structural
+corroboration beyond the value match alone.
+
+**`Eep_ESC_Mode` could NOT be located** (value `2` on all 3 boards' real `.ixi`) — the literal
+byte value `2` does not appear anywhere at all in the Reaper's 192-byte plaintext. This suggests
+`Eep_ESC_Mode` may not be a directly-stored byte in this structure — possibly derived by the app
+from firmware/layout metadata it already has, rather than read from the ESC. Left unconfirmed
+rather than guessed; a real negative result, not an oversight.
+
+This closes the field-gap-finding effort to 3 genuinely remaining names: `Eep_Note_Array`,
+`Eep_ESC_Layout`, `Eep_ESC_Mode` — see "What's NOT decoded" below.
+
 ## What's NOT decoded, and why
 
 Research into BLHeli_S (the open-source predecessor, `bitdump/BLHeli`, `BLHeli_S.asm`) confirmed
@@ -249,36 +314,28 @@ README states BLHeli_32 is literally "the third code developed" by the same proj
 response smooth"): a real generational rewrite for 32-bit ARM MCUs, explaining why field *names*
 persist while the byte layout was reworked for new hardware capability. **No public source
 exists** for BLHeli_32-only fields, since BLHeli_32 itself is closed-source. Remaining, after the
-2026-09-07 differential-capture pass resolved 9 of the fields previously listed here:
+2026-09-07 differential-capture pass and the 2026-09-08 cross-board correlation pass (see above)
+resolved every other known field name — only 3 names remain unconfirmed:
 
 - `Eep_Note_Array` — the actual melody note sequence (a separate field from `Eep_Note_Config`,
   confirmed above at offset 28), likely a substantially different byte layout (variable-length
-  sequence); not attempted via the differential method above.
-- All `Eep_Hw_*` capability flags (`Voltage_Sense_Capable`, `Current_Sense_Capable`,
-  `LED_Capable_0..3`, `Pwm_Freq_Min/Max`), `Eep_Nondamped_Capable` — expected read-only hardware
-  descriptors, not reachable via a settings-change differential capture (nothing to toggle in the
-  app for these). Would need a different technique (e.g. comparing across boards with genuinely
-  different hardware capabilities) to ever localize.
-- `Eep_ESC_Layout`, `Eep_ESC_Mode`, `Eep_FW_Main_Revision`, `Eep_FW_Sub_Revision`,
-  `Eep_Layout_Revision` — identity/version fields, also not user-changeable via settings, so not
-  reachable via this method either (though the layout/CPU strings ARE separately recoverable via
-  `extract_identity_strings()`'s delimiter search, not a fixed offset; `Eep_Name` itself is
-  confirmed, see the table above).
-- `Eep_SPORT_Capable` — discovered 2026-09-07 in the Furling32 `.ixi` alongside `LED_Control`,
-  `SBUS_Channel`, and `SPORT_Physical_ID` (all 3 of those are now confirmed, see the table above and
-  the cross-version section). `SPORT_Capable` has no `Pgm_` prefix — same category as the
-  `Eep_Hw_*` capability flags above, a firmware-reported hardware descriptor with no corresponding
-  user-facing control, so this method can't reach it either.
+  sequence); not attempted via any method above.
+- `Eep_ESC_Layout` — the layout/CPU identity string is separately recoverable via
+  `extract_identity_strings()`'s delimiter search, not a fixed numeric offset, so it doesn't fit
+  this module's offset-based `CONFIRMED_FIELDS` table the same way.
+- `Eep_ESC_Mode` — value `2` on all 3 boards tested, but that literal byte does not appear
+  anywhere in the Reaper's 192-byte plaintext (see the cross-board correlation section above).
+  Genuinely unresolved, possibly not a directly-stored byte at all.
 
-No offsets within the already-explored range (0-33) remain unconfirmed — all 3 original gaps
-(offsets 17, 24, 27) are closed, see the confirmed-fields table above.
+No offsets within the already-explored range (0-34, 48-55, 62-63) remain unconfirmed — every gap
+closeable by differential capture, direct `.ixi` cross-reference, or cross-board value correlation
+has been closed, see the confirmed-fields table above.
 
-Many of the still-undecoded fields above are 0/255 flag-like values with no way to disambiguate
-their offset by value-matching alone (too many candidate positions look identical against a field
-of repeated 0x00/0xFF bytes) or, like the `Eep_Hw_*`/identity fields, have no user-facing control to
-differentially test at all. **Decided approach**: don't guess. `setup_fields.decode_confirmed_fields()`
-returns only the confirmed fields, clearly labeled as partial everywhere it's surfaced (CLI output, module
-docstring).
+The 3 fields above have no way to disambiguate an offset by value-matching alone (`Eep_Note_Array`
+has no fixed single-byte encoding; `Eep_ESC_Layout` isn't a numeric offset; `Eep_ESC_Mode`'s value
+doesn't appear in the plaintext at all). **Decided approach**: don't guess.
+`setup_fields.decode_confirmed_fields()` returns only the confirmed fields, clearly labeled as
+partial everywhere it's surfaced (CLI output, module docstring).
 
 ## Cross-version field-name check (2026-09-05) — names mostly stable, one confirmed structural change
 
@@ -326,15 +383,14 @@ The raw byte-exact ciphertext/plaintext dump (already working, `fourwayif.read_f
 `dump-config --raw-dir`) remains the actual restore-safe backup mechanism regardless of
 field-decode completeness — it can't misinterpret anything since it's read back byte-for-byte, not
 reconstructed from named fields. **This module's output must still never drive a write-back/restore
-path** — 28 of 46 known field names confirmed as of 2026-09-07 is real progress (the
-differential-capture method above works and is reusable), but 18 remain unconfirmed (mostly
-`Eep_Hw_*`/identity fields with no user-facing control to test, plus `Eep_Note_Array`'s melody
-data and `Eep_SPORT_Capable`). Reconstructing a full plaintext
-from only the confirmed fields would still leave those unknown bytes as guesses (zero-fill or
-whatever a template happens to contain) — exactly the kind of partial-write gap that caused real
-data loss in the write-test incident (see [Hardware
+path** — 43 of 46 known field names confirmed as of 2026-09-08 is real progress (differential
+capture, direct `.ixi` cross-reference, and cross-board value correlation together), but 3 remain
+unconfirmed (`Eep_Note_Array`'s melody data, `Eep_ESC_Layout`, `Eep_ESC_Mode`). Reconstructing a
+full plaintext from only the confirmed fields would still leave those unknown bytes as guesses
+(zero-fill or whatever a template happens to contain) — exactly the kind of partial-write gap that
+caused real data loss in the write-test incident (see [Hardware
 Findings](hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07)),
 just via reconstruction gaps instead of an erase side effect. This module exists for read-only
 reporting and human comparison against a real `.ixi`; a real restore should always start from a
-genuine raw backup of that exact ESC, not a field-by-field rebuild — until the full 38 fields are
+genuine raw backup of that exact ESC, not a field-by-field rebuild — until all 46 fields are
 confirmed, if ever.

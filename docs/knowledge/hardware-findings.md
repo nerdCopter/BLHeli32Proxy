@@ -115,8 +115,11 @@ local firmware for ESC#2-4's layout.
 ## Third real hardware unit: FOXEER Reaper4IN1 F4 65A (2026-09-05) — crash confirmed reproducible
 
 A third, unrelated aircraft/ESC family — `FOXEER_Reaper4IN1_F4_65A_128`, Rev 32.10, `BLHeli32
-Bootloader m` (a different bootloader letter than the AK32/Furling32's `h` — likely a different
-STM32 variant, F4-based per the name vs. the others' F051x6). Real status check saved verbatim:
+Bootloader m` (a different bootloader letter than the AK32/Furling32's `h`). **Correction
+(2026-09-08, see below): the "F4" in the model name is NOT the MCU family** — the real MCU,
+confirmed live via `extract_identity_strings()`, is `AT32F421` (Artery Technology), not an STM32 at
+all. The guess below was wrong; kept, not deleted, per this project's own knowledge-retention
+standard. Real status check saved verbatim:
 [Suite-Check-FoxeerReaper.txt](Suite-Check-FoxeerReaper.txt) — ESC#1 MASTER + ESC#2-4 SLAVE
 (2 and 4 reversed, not 3 — a different direction pattern than the AK32/Furling32's uniform
 1,2,2,1-style layout), all 4 channels healthy (1.35M+ good DShot frames each, zero bad). A fresh
@@ -138,6 +141,84 @@ happens strictly in UI code after protocol work already succeeded, and (both tim
 local test-firmware file first" hypothesis from the Furling32 finding above is now the leading
 explanation, strengthened by this second identical reproduction — still not directly tested** (no
 `FOXEER_Reaper4IN1_F4_65A_128`-layout file was added before this attempt either).
+
+### A second, damaged unit of the same model — MCU identified, full raw-byte cross-validation (2026-09-08)
+
+A different physical Reaper 4-in-1 (same layout, `FOXEER_Reaper4IN1_F4_65A_128`), known damaged —
+user doesn't recall which motor power-train is burnt. Bench-tested safely: continuous DC power via
+a low-amp AC/DC wall adapter at 9.5V (not LiPo), not soldered to motors. Connected to a FoxeerF722v4
+FC running EmuFlight, `/dev/ttyACM0`. **All 4 channels fully readable** — config/communication side
+is intact regardless of where the physical damage is, consistent with damage isolated to the
+power/motor-drive stage, not the MCU or signal path. Real app confirmed all 4 healthy (10.3M+ good
+DShot frames each, single-digit bad frames — noise, not a real fault): `[MASTER]`/`[SLAVE]` pattern
+and Motor Direction `Normal/Reversed/Normal/Reversed` (ESC#2/#4 reversed) — matches the *existing*
+Reaper's known 1,2,1,2-style direction pattern exactly, consistent given it's the same board design.
+Exact firmware: `Eep_FW_Sub_Revision=100` → **32.10.0** (previously only known generically as
+"32.10"). Real `.ixi`, debug log, and app screenshot saved:
+[Damaged_BLHeli32_FOXEER_Reaper4IN1_F4_65A_128 - Rev. 32.10 - Multi_260908.ixi](Damaged_BLHeli32_FOXEER_Reaper4IN1_F4_65A_128%20-%20Rev.%2032.10%20-%20Multi_260908.ixi),
+[...Log.xlg](Damaged_BLHeli32_FOXEER_Reaper4IN1_F4_65A_128%20-%20Rev.%2032.10%20-%20Multi_260908.Log.xlg),
+[Damaged_2026-09-08_090705.png](Damaged_2026-09-08_090705.png).
+
+**MCU confirmed via `extract_identity_strings()`, live**: `AT32F421` — **a third distinct silicon
+vendor for BLHeli_32** (Artery Technology, after ST's STM32 on AK32 and GigaDevice's GD32 on
+Furling32/Furling32_4in1_C). The "F4" in this model's name is unrelated to the MCU family — see the
+correction above. Also confirmed from the saved debug log: device signature `$1506`, flash size
+`$8000` (32KB), bootloader `"m" #109` — and `Activation: Activated OK` logged for all 4 ESCs.
+
+**Full raw-byte cross-validation, completing part of the `PLAN.md` follow-up** (previously only
+`.ixi`-decoded values existed for this board, never raw Setup-block bytes): read all 4 ESCs via
+`dump-config --raw-dir dumps`, decoded with the same `CONFIRMED_FIELDS` table validated on AK32 and
+Furling32. **Every one of the 27 confirmed fields decoded correctly on this third MCU vendor too**
+— every value present in the real `.ixi` matched exactly (`Direction`, `Rampup_Pwr`, `Comm_Timing`,
+`Demag_Comp`, `Ppm_Min/Center/Max_Throttle`, `Enable_Throttle_Cal`, `Temp_Prot_Enable`,
+`Enable_Power_Prot`, `Brake_On_Stop`, `Beep_Strength`, `Beacon_Strength`, `Beacon_Delay`,
+`Max_Acceleration`, `Nondamped_Mode`, `Note_Config`, `Sine_Mode`, `Auto_Tlm_Mode`, `Stall_Prot`,
+`Pwm_Freq`/`Pwm_Frequency_Lo`, `SBUS_Channel`), and every field this board's `.ixi` omits entirely
+(`Volt_Prot`, `Curr_Prot`, `Curr_Sense_Cal`, `LED_Control`, `SPORT_Physical_ID` — no
+voltage/current-sense hardware, no LEDs, no S.PORT) decoded to the same sentinel pattern already
+seen on AK32 (`255`, or `100` for `Curr_Sense_Cal`'s zero-point). This is now 3 of 3 independently
+tested MCU vendors matching this offset map exactly — strong evidence it's a general BLHeli_32
+fact, not coincidence.
+
+**Refinement to `Eep_Pgm_Max_Acceleration`'s encoding**: this board's real app UI shows "Maximum
+Acceleration: **Maximum**" for the raw value `0` — not "0%". The `raw/10 = %/ms` scaling confirmed
+earlier (Furling32, `58` → "5.8% per ms") still holds for non-zero values; `0` itself is very
+likely a distinct "unrestricted/no limit" sentinel rather than a literal 0%-per-ms limit (which
+would nonsensically forbid all acceleration). Not re-tested with a differential change to fully
+confirm the boundary, but the semantic reading is unambiguous from the UI label alone.
+
+No new field names on this board from the initial 27-field pass — its full field set is a subset
+of the 46 already catalogued across AK32 and Furling32. One new confirmed *value*, though:
+`Eep_Note_Config=255` displays as "Music Off" in the real app (this board has an empty
+`Eep_Note_Array`) — not previously observed, since both AK32 and Furling32 had actual melodies
+configured.
+
+**PWM Frequency High confirmed via real differential test, same session**: changed "PWM Frequency
+High" from 128 kHz to 48 kHz on ESC1 (motor_index 0) via the real app's ESC Setup tab, Write
+Setup, diffed the raw plaintext against a pre-change backup — exactly one byte changed: **offset
+34, `128`→`48`**. This is `Eep_Pgm_Pwm_Frequency_Hi`, a genuinely new offset not previously
+located (paired with `Eep_Pgm_Pwm_Frequency_Lo`, the 32.9+ name for the already-confirmed offset 5
+— see [Setup Block Fields](setup-block-fields.md)).
+
+**12 more fields confirmed, same session, via a new third method — cross-board value
+correlation**: with all 3 real boards' raw plaintext AND `.ixi` values on hand (AK32, Furling32,
+this Reaper), searched every offset 0-191 for a byte pattern matching each remaining unconfirmed
+field's per-board `.ixi` value simultaneously across all 3 boards — no new hardware interaction
+needed. Resolved `Eep_FW_Main_Revision` (offset 0), `Eep_FW_Sub_Revision` (1), `Eep_Layout_Revision`
+(2), `Eep_Hw_Voltage_Sense_Capable` (48), `Eep_Hw_Current_Sense_Capable` (49),
+`Eep_Hw_LED_Capable_0/1/2/3` (50-53), `Eep_Hw_Pwm_Freq_Min/Max` (54/55), `Eep_SPORT_Capable` (62),
+`Eep_Nondamped_Capable` (63) — 7 via a unique unambiguous 3-way match, 6 more via elimination
+against already-confirmed offsets plus sequential-position consistency with the real `.ixi`'s own
+field order. Full method and confidence breakdown in [Setup Block
+Fields](setup-block-fields.md#method--12-more-fields-via-cross-board-value-correlation-2026-09-08).
+
+**`Eep_ESC_Mode` (value `2` on all 3 boards) could not be located** — the byte value `2` does not
+appear anywhere in this board's 192-byte plaintext, suggesting it may not be a directly-stored
+byte at all. Left unconfirmed.
+
+This closes the field-name-confirmation effort to only 3 genuinely remaining names:
+`Eep_Note_Array`, `Eep_ESC_Layout`, `Eep_ESC_Mode` — 43 of 46 known `.ixi` field names now
+confirmed.
 
 **Fourth reproduction (2026-09-05)**: a fourth aircraft, `Furling32_4in1_C - Rev. 32.9`, bootloader
 `k` (a third distinct bootloader letter, after `h` and `m`) — same exact crash address again.
