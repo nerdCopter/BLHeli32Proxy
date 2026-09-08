@@ -439,6 +439,21 @@ brute-force in the first place. Not yet tried: `--max-combo 2` against either of
 windows (65,536 guesses, ~1 hour each at the measured rate) — would confirm whether they're
 genuinely 2-byte differences or something larger.
 
+**Follow-up same day, k=1 now 3-for-3 real failures, plus a real structural finding**: rapidly
+bisected 10 more real 32-byte unresolved chunks (candidate-compare only, ~0.06s/call, no brute
+force — under a minute total for all 10) to find their true mismatching sub-window(s):
+`0x2440+32` and `0x2820+32` each have 2 separate mismatching 8-byte windows; `0x2840+32` has
+exactly one, cleanly isolated, at `0x2858`; **`0x2860+32` through `0x2920+32` (6 consecutive
+chunks, ~216 bytes) mismatch in all 4 sub-windows each** — a large contiguous divergent span, not
+scattered differences, consistent with a real code insertion/relocation between firmware versions
+cascading into everything downstream. Ran the same k=1 single-position sweep against the newly
+isolated `0x2858` window: **all 8 hypotheses failed again** — 3 for 3 real isolated windows now
+confirmed to have 2+ simultaneous differences, strengthening the "real diffs cluster, not
+isolated" finding above. `0x2858`'s exact divergence (2+ bytes, not yet which ones) remains
+unresolved; a real next step would be `--max-combo 2` against `0x2858` specifically, since it's a
+genuinely clean single 8-byte window (unlike the earlier two, which sit inside larger, messier
+mismatch regions).
+
 **Also confirmed (2026-09-08, unrelated to the above): a full power cycle (both FC USB and ESC's
 separate DC power) recovers a wedged FC state that a USB-only replug did not.** Symptom was
 different from the earlier stuck-passthrough case too: consistently a 3-byte reply instead of the
