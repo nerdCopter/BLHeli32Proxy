@@ -18,7 +18,7 @@ flowchart TD
     G1 --> G1e[✅ Write-back tested: full-block-copy repair confirmed working]
 
     G2 --> G2a[❌ Blocked: STM32 RDP protection, confirmed]
-    G2 --> G2b[❓ verify-oracle explored, inconclusive]
+    G2 --> G2b[⬜ Verify-oracle brute force: feasible, ~2-4 days/board, not yet attempted at scale]
 
     G3 --> G3a[❌ Confirmed impossible without soldering]
 
@@ -51,15 +51,22 @@ flowchart TD
   either an erase-then-full-rewrite sequence, or the same full-block-copy pattern with the target
   field edited in the source plaintext before re-encrypting.
 
-## 2. Firmware dumps — closed, blocked
+## 2. Firmware dumps — reopened, brute force measured feasible (2026-09-08)
 
-- Confirmed blocked by STM32 Read-Out Protection (RDP), a real hardware protection, not a code
-  gap. See [Hardware Findings](hardware-findings.md#firmware-dump-blocker-rdp) for the address-map
-  evidence and [Hardware Findings](hardware-findings.md#the-verify-oracle-exploration) for the
-  explored (and inconclusive) verify-command side-channel idea.
-- No path forward without physical SWD hardware, which is out of scope for this project. One
-  unproven, unconfirmed non-destructive lead exists for the STM32F0 family — see [Hardware
-  Findings](hardware-findings.md#firmware-dump-blocker-rdp).
+- Direct `cmd_DeviceRead` remains confirmed blocked by STM32 Read-Out Protection (RDP), a real
+  hardware protection, not a code gap. See
+  [Hardware Findings](hardware-findings.md#firmware-dump-blocker-rdp) for the address-map evidence.
+- The Verify-oracle side channel (`cmd_DeviceVerify`, no write/erase risk) is confirmed live even
+  inside RDP-protected flash (2026-09-06) and, as of 2026-09-08, its byte-by-byte brute-force path
+  (`dump-firmware --discover-unresolved`) has a real measured cost: **0.060s per guess**, so
+  **~2-4 days of continuous round-trips** for a ~21,500-byte unresolved gap (the actual size found
+  on the damaged Reaper against the closest available candidate). Not yet attempted at that scale —
+  the CLI has no checkpoint/resume support yet, a real risk for an unattended multi-day run. Full
+  account: [Hardware
+  Findings](hardware-findings.md#goal-2-brute-force-feasibility--discover-unresolved-real-numbers-2026-09-08).
+- No path forward for *direct* reads without physical SWD hardware, which is out of scope for this
+  project. One unproven, unconfirmed non-destructive lead exists for the STM32F0 family — see
+  [Hardware Findings](hardware-findings.md#firmware-dump-blocker-rdp).
 
 ## 3. Bootloader unlock (AM32, no soldering) — closed, not possible as scoped
 

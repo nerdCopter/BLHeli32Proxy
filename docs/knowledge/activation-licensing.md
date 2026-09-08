@@ -287,6 +287,47 @@ presents. **Confirmed live against the real app** (see "Local firmware loading" 
 the OS certificate store — a CA-trusted self-signed cert was accepted with no pinning failure. No
 binary patching needed.
 
+## Public-exposure check for the real flash-write protocol (2026-09-08)
+
+Before spending more session time on the still-open "second undiscovered host" question (see the
+"Flash Selected ESC clicked, no write occurred" section above), checked whether anyone else has
+already publicly documented BLHeli_32's real ESC-activation/flash-write network protocol.
+
+**Checked**: `bitdump/BLHeli`'s contributors' public repos/gists (`sskaug` — BLHeli's original
+author — has one public repo, a fork, no gists; other contributors not individually exhausted, low
+prior likelihood since none are BLHeli_32-specific authors); AM32's actual GitHub account
+(`AlkaMotors`, 20 repos, including configurator forks) — no match; GitHub code search for
+`blheli.org`, `BLHeli32_2017_1`, `BLHeliSuite32 URI Client`, `ReadDeviceActivationStatus`,
+`FrameManufKeyCodeExpires`, `IsBannedFromFlashRevision` — every hit for the real hostname/endpoint
+terms came back **only from this project's own repo**; elmagnifico.tech's own GitHub-hosted blog
+repo (`elmagnificogi/elmagnificogi.github.io`) — every BLHeli-tagged post is already translated
+into this project's `research/notes/`, nothing untranslated exists.
+
+**Result: nobody else has publicly exposed this protocol.** This project's own capture attempt is,
+as far as this check found, the most advanced public work on this specific question.
+
+**Follow-up on the "bootloader unlock key" lead (2026-09-08) — downgraded to unconfirmed folklore,
+not just unverified.** A deeper pass fetched the actual ArduPilot Discourse thread in full (both
+pages), the linked `bitdump/BLHeli` issue (#743), the AM32 Hacking Guide, and searched AlkaMotors'
+repos directly — **no primary source anywhere states "bootloader unlock key" in these terms.** The
+thread's actual content: a feature request asking BLHeli to *provide* a bootloader unlock (not a
+claim one is fetched per-flash), and one vague, undetailed comment ("it still authenticates with
+the server") that adds nothing beyond the version-check ping this project already confirmed. The
+AM32 guide and AlkaMotors' repos cover hardware RDP removal only, unrelated to any BLHeli32
+server-side key.
+
+**A methodology flag, worth remembering generally**: two `WebSearch` queries during this follow-up
+returned confident, detailed paragraphs claiming the unlock key "is based on the license key and
+generated on-the-fly by BLHeli servers" — but fetching the actual cited pages showed none of them
+said this. That specific narrative was the search tool's own synthesis, not sourced content. A
+reminder that a search engine's summary is not itself a source — always fetch and read the
+underlying page before treating a claim as real, especially before writing it into this corpus.
+
+**Current status**: no real lead on a second network call exists beyond the "still-undiscovered
+host" hypothesis already documented above. The next real flash-attempt capture should still watch
+broadly (all DNS/TLS SNI, not just `blheli.org`) rather than assume any particular alternate
+protocol shape.
+
 ## Scope note
 
 Further probing of `blheli.org`'s other paths (path guessing/enumeration against a third party's

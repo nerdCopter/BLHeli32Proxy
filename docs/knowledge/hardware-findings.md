@@ -34,6 +34,12 @@ ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#`
 - **Independent corroboration from the real app (2026-09-05)**: `BLHeliSuite32xl`'s own settings
   (`Settings/BLHeliSuite32xl.ini`, `[Interface] 4wifConnectDeviceRetry=5`) default to 5 retries too,
   user-configurable 1-10 in its UI. Matches this project's own `attempts` fix independently.
+- **Killing a process mid-4-way-if session sticks the FC's passthrough state (2026-09-08)**: a
+  `SIGTERM`'d `dump-firmware` process (via a `timeout` wrapper) never reached `exit_interface()`.
+  Every fresh `enter_4way_if()` afterward (new process, new port open) got zero MSP reply, even
+  after retries. Only fix found: physically unplug/replug the FC's USB cable (ESC power untouched).
+  See "Goal 2 brute-force feasibility" below for the full incident — relevant to any long-running
+  or interruptible command against this protocol, not just brute-forcing.
 - **All 4 ESC channels confirmed working**: verified via the real BLHeliSuite32xl app's own status
   check (all 4 ESCs healthy, zero bad DShot frames each — raw output in
   [Suite-Check.txt](Suite-Check.txt)) and via this project's own code connecting to and reading all
@@ -280,6 +286,50 @@ available at all). Consistent with the user's "point-release drift" hypothesis: 
 later patches can accumulate changes toward the *next* major version, making them less similar to
 their own line's earlier patches than the version numbers alone would suggest. Saved:
 `dumps/BLHeli32_Furling32_4in1_C - Rev. 32.9.5 - AppCode_260906.bin`/`.hex`.
+
+**Damaged Reaper (32.10.0), 2026-09-08**: `dump-firmware` against the only available candidate
+(`FOXEER_Reaper4IN1_F4_65A_128_Multi_32_95.Hex`, 32.9.5 — no 32.10 test-firmware file exists in the
+archive, this exact layout's most recent one point-release behind the real 32.10.0 on the board)
+confirmed only **9.4%** of the app-code region (2,240/23,808 bytes) —
+[`dumps/reaper-32.10-vs-32.9.5-candidate.bin`](../../dumps/reaper-32.10-vs-32.9.5-candidate.bin).
+Lower than Furling32_4in1_C's 44.8% one-point-release gap, consistent with the same "point-release
+drift" pattern but evidently steeper for this particular layout/version jump — not yet explained
+further. **2,450 unresolved chunks remain (21,568 bytes, ~91% of the image)** — divergence starts
+immediately at `0x2400` and only 1-byte matching runs survive past roughly `0x74d8` onward, meaning
+most of this board's actual app code differs meaningfully from the 32.9.5 candidate.
+
+## Goal 2 brute-force feasibility — `--discover-unresolved`, real numbers (2026-09-08)
+
+With 21,568 bytes unresolved on the damaged Reaper (above), measured the real cost of
+`cmd_DeviceVerify`-based brute-forcing (`fw.discover_byte()`, up to 256 guesses/byte, no
+write/erase risk — see "The verify-oracle exploration" below) instead of guessing at feasibility.
+
+**Real per-call latency, measured directly**: 3 individual `verify_flash()` calls (2 known
+mismatches at `0x2400`, 1 probe at the info-page address `0x7c00`) each took **0.060s**. Scaling to
+the full 21,568-byte gap: **worst case ~92 hours (3.8 days)**, **average case ~46 hours (1.9 days)**
+of continuous round-trips, assuming the correct byte value is uniformly distributed 0-255. Multi-day,
+not multi-week — more tractable than the initial impression, but still a real commitment, and not
+yet attempted at that scale.
+
+**A real robustness gap found while measuring this**: an earlier attempt to time a small 32-byte
+sample via `dump-firmware --discover-unresolved` was wrapped in a 5-minute `timeout` for
+safety — it never completed even one byte's 256-guess search in that time (implying, wrongly, a
+~1s+/call cost). Root cause, confirmed after the fact: `timeout`'s `SIGTERM` killed the process
+mid-4-way-if-session, before it could call `exit_interface()` — this left the flight controller's
+own MSP passthrough state stuck. Every subsequent `enter_4way_if()` attempt (fresh process, fresh
+`SerialTransport`) got zero reply, even after 3 retries. **The only recovery found: physically
+unplug and replug the FC's USB cable** (the ESC's own separate DC power did not need to be
+touched) — after that, `enter_4way_if()`/`connect_esc()` succeeded immediately and the real
+0.060s/call figure above was measured cleanly.
+
+**Practical implication for any real multi-day brute-force run**: the current CLI has no
+checkpoint/resume support (`--discover-unresolved` holds all progress in memory until the final
+write) and no signal handling to cleanly exit the 4-way-if session on interruption. A crash,
+`Ctrl-C`, connection drop, or anything else that kills the process mid-run would both lose all
+progress AND require a physical USB replug to recover the FC before any further work — a real
+practical risk for an unattended multi-day job as currently implemented. Not yet attempted at full
+scale; a checkpointing/resumable design would need to exist first for this to be a reasonable
+unattended undertaking.
 
 ## `write_flash()` without erase-first corrupts far more than the targeted bytes (2026-09-07)
 

@@ -55,7 +55,7 @@ Summary:
 | # | Goal | Status |
 |---|---|---|
 | 1 | Backups (config/Setup-block data) | Mostly complete |
-| 2 | Firmware dumps (executable code) | Closed — blocked by hardware RDP protection |
+| 2 | Firmware dumps (executable code) | Reopened 2026-09-08 — RDP still blocks direct reads, but the Verify-oracle brute-force path is now measured feasible (~2-4 days/board) and being pursued |
 | 3 | Bootloader unlock (AM32, no soldering) | Closed — confirmed impossible as scoped |
 | 4 | Proxy/licensing intercept (original goal) | In progress — fully staged, one decision from capturing the real activation call |
 
@@ -133,6 +133,24 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
 ---
 
 ## 7. Backlog
+
+- **Goal 2 (firmware dumps) reopened via Verify-oracle brute force — feasibility measured, not yet
+  attempted at scale (2026-09-08).** RDP still blocks direct `cmd_DeviceRead`, but `dump-firmware`'s
+  `--discover-unresolved` flag (already built, `fw.discover_byte()`, up to 256 `cmd_DeviceVerify`
+  guesses/byte, no write/erase risk) makes byte-by-byte recovery genuinely possible. Ran a real
+  verify-diff against the damaged Reaper (32.10.0) using the closest available candidate (32.9.5,
+  no exact-version file exists) — only 9.4% matched (2,240/23,808 bytes), leaving 21,568 unresolved
+  bytes. Measured real per-call latency directly: **0.060s/call**, giving a real estimate of
+  **~2-4 days of continuous round-trips** for the full unresolved region (worst case 92h, average
+  case 46h) — a genuine multi-day undertaking, but not the multi-week-or-more result the first,
+  confounded timing attempt suggested. See [Hardware
+  Findings](docs/knowledge/hardware-findings.md#goal-2-brute-force-feasibility--discover-unresolved-real-numbers-2026-09-08)
+  for the full account, including a real robustness gap found along the way: killing a process
+  mid-4-way-if session (even via a safety `timeout` wrapper) sticks the FC's MSP passthrough state,
+  recoverable only by physically replugging its USB cable — no software recovery path exists.
+  **Not yet attempted at full scale**: the current CLI has no checkpoint/resume support, so a
+  multi-day unattended run risks losing all progress (and needing a physical replug) on any
+  interruption. A resumable design should exist before attempting the real run.
 
 - **AM32 flashing without soldering — closed, confirmed not possible.** BLHeli_32 sets the STM32's
   Read-Out Protection (RDP) fuse; converting to AM32 always requires physically soldering SWD
