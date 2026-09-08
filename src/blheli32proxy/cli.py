@@ -231,7 +231,7 @@ def _print_defaults_comparison(plaintext: bytes, candidate_path: str, key) -> No
 def _save_raw_setup_backup(ciphertext: bytes, raw_dir: str | None, esc_index: int) -> None:
     """Save one ESC's exact 256-byte Setup-block ciphertext to <raw_dir>/esc<N>-setup-<timestamp>.bin
     — a byte-exact backup usable for a full restore (unlike --out's decoded-fields-only file, which
-    only covers the 13 confirmed fields). No-op if raw_dir is None. Refuses to write into
+    only covers the 45 confirmed fields). No-op if raw_dir is None. Refuses to write into
     $BLHELI32PROXY_ARCHIVE_DIR/$BLHELI32PROXY_APP_DIR, same guard as dump-info-page/dump-firmware."""
     if raw_dir is None:
         return

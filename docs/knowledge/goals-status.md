@@ -12,8 +12,8 @@ flowchart TD
     A --> G4[4. Proxy / licensing intercept]
 
     G1 --> G1a[✅ Raw byte-exact Setup-block read, all 4 ESCs]
-    G1 --> G1b[✅ 13 named fields decoded, match real .ixi]
-    G1 --> G1c[⬜ Remaining ~26 fields: no public source]
+    G1 --> G1b[✅ 45 of 46 named fields decoded, match real .ixi]
+    G1 --> G1c[⬜ Eep_ESC_Mode: exhausted, needs new binary disassembly]
     G1 --> G1d[⬜ No .ixi-style file writer yet]
     G1 --> G1e[✅ Write-back tested: full-block-copy repair confirmed working]
 
@@ -35,12 +35,13 @@ flowchart TD
 ## 1. Backups — mostly complete
 
 - Raw ciphertext/plaintext Setup-block dump: works reliably, all 4 ESCs (`protocol/fourwayif.py`).
-- 13 confirmed named fields decoded (`protocol/setup_fields.py`) — every value matches a real
-  BLHeliSuite32xl `.ixi` backup exactly. See [Setup Block Fields](setup-block-fields.md).
+- 45 of 46 known field names decoded (`protocol/setup_fields.py`) — every value matches a real
+  BLHeliSuite32xl `.ixi` backup exactly, confirmed across 3 independent MCU vendors. See
+  [Setup Block Fields](setup-block-fields.md).
 - Wired into CLI (`dump-config`/`probe-flash`/`dump-info-page`).
-- Not done: the remaining ~26 fields (no public source — BLHeli_32 is closed-source); a dedicated
-  backup-file writer that produces a `.ixi`-style multi-`[ESCn]` file (currently prints to stdout
-  only).
+- Not done: `Eep_ESC_Mode` (the one remaining field, a genuinely exhausted gap — see
+  [Setup Block Fields](setup-block-fields.md#whats-not-decoded-and-why)); a dedicated backup-file
+  writer that produces a `.ixi`-style multi-`[ESCn]` file (currently prints to stdout only).
 - **Write-back tested on real hardware (2026-09-07)** — see
   [Hardware Findings](hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07).
   Confirmed: a partial write (fewer than the full 256 bytes) without erasing first can silently
