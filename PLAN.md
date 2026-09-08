@@ -144,7 +144,7 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   the tool itself. Closed unless the firmware-loss trade-off and the soldering/tooling effort are
   both explicitly accepted.
 
-- **Cross-version Setup-block field validation — 43 of 46 known field names confirmed
+- **Cross-version Setup-block field validation — 45 of 46 known field names confirmed
   (2026-09-08).** Real raw `dump-config --raw-dir` reads (not just `.ixi`-decoded values) now exist
   for 2 boards: AK32 (STM32F051x6, firmware 32.7, 38 known field names) and Furling32 (GD32F350x6,
   firmware 32.9.5, 45 known field names) — a different MCU vendor and major firmware line, 46 total
@@ -170,11 +170,22 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
   `Eep_Nondamped_Capable`. See [Hardware Findings](docs/knowledge/hardware-findings.md)'s "A
   second, damaged unit of the same model" section and [Setup Block
   Fields](docs/knowledge/setup-block-fields.md#method--12-more-fields-via-cross-board-value-correlation-2026-09-08).
-  **Only 3 field names remain unconfirmed**: `Eep_Note_Array` (melody note sequence — untried,
-  would need a real note-sequence change + diff, more complex than the single-value fields done so
-  far); `Eep_ESC_Layout` (recoverable via `extract_identity_strings()`, not a fixed numeric
-  offset); `Eep_ESC_Mode` (value `2` on all 3 boards, but that byte value doesn't appear anywhere
-  in the Reaper's plaintext — genuinely unresolved, possibly not a directly-stored byte at all).
+  **Then, same day, `Eep_ESC_Layout` and `Eep_Note_Array` closed too** — no new hardware needed,
+  the lead came from re-reading this project's own research corpus
+  (`research/notes/BLHeliSuite32-Reverse3.en.md`, a real disassembly of the vendor's binary),
+  which documents fixed wire-format offsets for both fields. Cross-checked against raw plaintext
+  already captured from all 3 boards: `Eep_ESC_Layout` (offset 64, 32 bytes) matched byte-exact in
+  all 3 cases; `Eep_Note_Array` (offset 144, 48 bytes) required deriving the actual note encoding,
+  verified against 2 real Furling32 melodies plus AK32's melody plus the Reaper's empty state, all
+  byte-for-byte exact. See [Setup Block Fields](docs/knowledge/setup-block-fields.md#method--eep_esc_layout-and-eep_note_array-closed-via-this-projects-own-research-corpus-2026-09-08).
+  **`Eep_Note_Array`'s encoding fully closed same day**: a real differential test on the damaged
+  Reaper, using the exact script syntax documented in the vendor app's own Music Editor tooltip
+  (`C42 P1 P2 P4 P8 P16 P32 P64 P128`), confirmed the previously-untested half-note duration and
+  revealed pauses support 8 lengths (wider than notes' 4) via a pitch-code acting as a x16 scale
+  bit. Nothing about this field remains inferred. **45 of 46 known field names confirmed — only
+  `Eep_ESC_Mode` remains, and that gap is genuinely exhausted** (checked against every research
+  note in this project's corpus, the vendor manual, and raw bytes on 3 boards — closing it further
+  needs new binary disassembly work, out of scope for this project's method).
   **Follow-up, not yet started**: same raw-byte check against Furling32_4in1_C (32.9, GD32F350x6 —
   already a confirmed MCU/firmware combo via `.ixi` alone, but never via raw bytes) whenever that
   hardware is available again.

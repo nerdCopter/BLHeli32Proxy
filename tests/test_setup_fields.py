@@ -176,9 +176,8 @@ def test_format_ixi_section_esc_numbering_is_one_based():
 def test_format_ixi_section_never_fabricates_unconfirmed_fields():
     section = sf.format_ixi_section(0, EXPECTED_ESC0)
     # only CONFIRMED_FIELDS lines — none of the real .ixi's still-unconfirmed fields
-    # (as of 2026-09-08: only these 3 remain unconfirmed, see setup_fields.py's module docstring)
-    for unconfirmed in ("Eep_ESC_Layout", "Eep_ESC_Mode", "Eep_Note_Array"):
-        assert unconfirmed not in section
+    # (as of 2026-09-08: only Eep_ESC_Mode remains unconfirmed, see setup_fields.py's docstring)
+    assert "Eep_ESC_Mode" not in section
 
 
 def test_format_ixi_section_missing_field_raises():
@@ -221,6 +220,68 @@ def test_format_ixi_section_includes_name_when_given():
 def test_format_ixi_section_omits_name_line_when_not_given():
     section = sf.format_ixi_section(0, EXPECTED_ESC0)
     assert "Eep_Name" not in section
+
+
+def test_decode_esc_layout_from_real_ak32_plaintext():
+    assert sf.decode_esc_layout(REAL_PLAINTEXT_ESC0) == "Aikon_AK32_4IN1_35A_6S_V1_0"
+
+
+def test_decode_esc_layout_too_short_raises():
+    with pytest.raises(ValueError):
+        sf.decode_esc_layout(b"\x00" * 10)
+
+
+def test_format_ixi_section_includes_layout_when_given():
+    section = sf.format_ixi_section(0, EXPECTED_ESC0, layout="Aikon_AK32_4IN1_35A_6S_V1_0")
+    assert section.startswith("[ESC1]\nEep_ESC_Layout=Aikon_AK32_4IN1_35A_6S_V1_0\n")
+
+
+def test_format_ixi_section_omits_layout_line_when_not_given():
+    section = sf.format_ixi_section(0, EXPECTED_ESC0)
+    assert "Eep_ESC_Layout" not in section
+
+
+# real melody: this AK32's actual configured startup tune, decoded from
+# REAL_PLAINTEXT_ESC0's offset 144-191 -- confirmed byte-exact against this same board's real
+# .ixi Eep_Note_Array value (see docs/knowledge/setup-block-fields.md)
+REAL_NOTE_ARRAY_ESC0 = (
+    "C68G58C68E68G68C78G68G#58C68D#68G#68D#68G#68C78D#78G#78D#78D68"
+    "F68A#68F68A#68D78F78D78F78A#78F78"
+)
+
+
+def test_decode_note_array_from_real_ak32_plaintext():
+    assert sf.decode_note_array(REAL_PLAINTEXT_ESC0) == REAL_NOTE_ARRAY_ESC0
+
+
+def test_decode_note_array_empty_when_all_ff():
+    plaintext = REAL_PLAINTEXT_ESC0[:144] + b"\xff" * 48
+    assert sf.decode_note_array(plaintext) == ""
+
+
+def test_decode_note_array_too_short_raises():
+    with pytest.raises(ValueError):
+        sf.decode_note_array(b"\x00" * 10)
+
+
+def test_decode_note_array_half_note_and_full_pause_range():
+    """Real differential test, damaged Reaper (2026-09-08): typed the vendor app's own Music
+    Editor script "C42 P1 P2 P4 P8 P16 P32 P64 P128" (exact syntax from its tooltip), Write Setup,
+    read back. Confirms the previously-untested half-note duration and reveals pauses support 8
+    lengths (wider than notes' 4) via a pitch-code (60 vs 61) acting as a x16 scale bit."""
+    raw = bytes.fromhex("80fcbc7c3cfdbd7d3d") + b"\xff" * (48 - 9)
+    plaintext = b"\x00" * 144 + raw
+    assert sf.decode_note_array(plaintext) == "C42P1P2P4P8P16P32P64P128"
+
+
+def test_format_ixi_section_includes_note_array_when_given():
+    section = sf.format_ixi_section(0, EXPECTED_ESC0, note_array=REAL_NOTE_ARRAY_ESC0)
+    assert section.rstrip("\n").endswith(f"Eep_Note_Array={REAL_NOTE_ARRAY_ESC0}")
+
+
+def test_format_ixi_section_omits_note_array_line_when_not_given():
+    section = sf.format_ixi_section(0, EXPECTED_ESC0)
+    assert "Eep_Note_Array" not in section
 
 
 def test_extract_identity_strings_from_real_ak32_plaintext():

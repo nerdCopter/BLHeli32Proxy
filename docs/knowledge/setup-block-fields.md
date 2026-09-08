@@ -62,12 +62,12 @@ value (80 = 0x50) for the original state. This is strong confirmation that the r
 *is* the `.ixi` file's own on-disk representation for at least this field, not just a convenience
 this module invented.
 
-## Confirmed fields (`protocol/setup_fields.py`) — 43 of 46 known `.ixi` field names (42 int-valued
-in `CONFIRMED_FIELDS`, plus `Eep_Name` decoded separately — see below; 46 = the union of AK32's 38
-and Furling32's 45 real `.ixi` field names — see the cross-version section for the precise count
-and the one field, `Eep_Pgm_Pwm_Frequency_Lo`, that's really the same already-confirmed byte as
-`Eep_Pgm_Pwm_Freq` under a different name). Only 3 field names remain unconfirmed as of
-2026-09-08: `Eep_Note_Array`, `Eep_ESC_Layout`, `Eep_ESC_Mode` — see "What's NOT decoded" below.
+## Confirmed fields (`protocol/setup_fields.py`) — 45 of 46 known `.ixi` field names (42 int-valued
+in `CONFIRMED_FIELDS`, plus `Eep_Name`/`Eep_ESC_Layout`/`Eep_Note_Array` each decoded separately —
+see below; 46 = the union of AK32's 38 and Furling32's 45 real `.ixi` field names — see the
+cross-version section for the precise count and the one field, `Eep_Pgm_Pwm_Frequency_Lo`, that's
+really the same already-confirmed byte as `Eep_Pgm_Pwm_Freq` under a different name). Only
+`Eep_ESC_Mode` remains unconfirmed as of 2026-09-08 — see "What's NOT decoded" below.
 
 | Offset | Width | Field | Confirmed value (AK32 baseline) | Confirmed 2026-09-07 |
 |---|---|---|---|---|
@@ -300,8 +300,82 @@ byte value `2` does not appear anywhere at all in the Reaper's 192-byte plaintex
 from firmware/layout metadata it already has, rather than read from the ESC. Left unconfirmed
 rather than guessed; a real negative result, not an oversight.
 
-This closes the field-gap-finding effort to 3 genuinely remaining names: `Eep_Note_Array`,
-`Eep_ESC_Layout`, `Eep_ESC_Mode` — see "What's NOT decoded" below.
+At this point in the session, 3 names remained: `Eep_Note_Array`, `Eep_ESC_Layout`,
+`Eep_ESC_Mode`. The next two sections close the first two — see "What's NOT decoded" below for
+the final, current state (only `Eep_ESC_Mode` remains).
+
+## Method — `Eep_ESC_Layout` and `Eep_Note_Array` closed via this project's own research corpus (2026-09-08)
+
+**No new hardware needed for this pass** — the lead came from re-reading this project's own
+already-translated research notes. `research/notes/BLHeliSuite32-Reverse3.en.md` (a real
+disassembly of the vendor's own `ReadSetupFromBinString`, done in 2021) documents a fixed
+wire-format offset table straight from the vendor's own binary, including `Eep_ESC_Layout` (offset
+0x40 = 64, 32 bytes) and `Eep_Note_Array` (offset 0x90 = 144, 48 bytes) — a lead not previously
+connected to this module's own empirical offset-hunting work. `BLHeliSuite32-Reverse5.en.md`
+(2024, a later recompiled build) shows these exact numbers drifting in the *in-memory* `TBLHeli`
+object layout between binary versions, but explicitly confirms **"the wire protocol itself did
+not change"** — the 256-byte on-flash format is stable even when the app's own internal struct
+layout gets recompiled with different offsets.
+
+**`Eep_ESC_Layout` (offset 64, 32 bytes, `#`-delimited ASCII, space-padded)**: cross-checked
+against already-captured raw plaintext from all 3 real boards on file — byte-exact match to each
+board's own real `.ixi` value in every case:
+
+- AK32: `#Aikon_AK32_4IN1_35A_6S_V1_0#   ` → `Aikon_AK32_4IN1_35A_6S_V1_0`
+- Furling32: `#Furling32#                     ` → `Furling32`
+- Reaper: `#FOXEER_Reaper4IN1_F4_65A_128#  ` → `FOXEER_Reaper4IN1_F4_65A_128`
+
+`decode_esc_layout()` implements this. `extract_identity_strings()`'s existing delimiter search is
+kept as-is (more robust, also recovers the MCU string) — this fixed offset is an additional,
+independently-confirmed fact, not a replacement.
+
+**`Eep_Note_Array` (offset 144, 48 bytes)**: locating the offset was only half the problem — the
+actual note *encoding* still had to be derived from scratch, since no source documents it. First
+pass decoded against 2 distinct real Furling32 melodies (`esc0`/`esc1`-setup-20260907-17*.bin, 74
+total note instances spanning octaves 4-6 and 3 different durations), the AK32's own melody
+(duration-8 notes only), and the Reaper's empty state (all `0xFF`) — every single one matched its
+board's own real `.ixi` Eep_Note_Array text byte-for-byte, using a partial formula covering notes
+and one pause length (1/8) only. **The complete formula, confirmed by the real differential test
+below and matching `decode_note_array()`'s actual implementation exactly:**
+
+```
+byte = (duration_index << 6) | pitch
+pitch 0-59: a real note, pitch = 16*(octave-4) + chromatic_semitone (C=0, C#=1, D=2, ... B=11)
+pitch 60/61: a rest/pause ("P" in .ixi text); pause_length =
+    duration_for_index[duration_index] * (16 if pitch == 61 else 1)
+duration_index: 0 = 8th, 1 = quarter, 2 = half, 3 = whole
+```
+
+Every repeated note token in every real melody mapped to the exact same byte value, and every
+distinct token mapped to a distinct byte value — confirmed by internal cross-consistency across
+~74 note instances, not a one-off coincidence. `decode_note_array()` implements this, emitting the
+same concatenated text format a real `.ixi` shows (e.g. `C68G58C68...`).
+
+**Fully closed via a real differential test, same day (2026-09-08)**: the vendor app's own Music
+Editor has a tooltip documenting its exact script syntax (`[Note][Octave][Length]` for notes,
+`P[Length]` for rests) — this itself is worth recording, since neither the manual nor this
+project's research corpus mentions it: notes support 4 lengths (1/1, 1/2, 1/4, 1/8, matching the
+2-bit duration field derived above exactly), but **pauses support 8 lengths** (1/1 through
+1/128) — wider than notes get, a real detail this project hadn't anticipated from the byte data
+alone. Typed the exact script `C42 P1 P2 P4 P8 P16 P32 P64 P128` into the damaged Reaper's ESC1,
+Write Setup, read back
+([`dumps/esc0-setup-20260908-103942.bin`](../../dumps/esc0-setup-20260908-103942.bin)). All 9
+tokens decoded to an exact match:
+
+- `C42` (the previously-untested half-note duration) → byte `0x80` = duration_index 2, pitch 0 —
+  confirms the inferred half-note mapping exactly as predicted.
+- `P1`/`P2`/`P4`/`P8` → bytes `0xfc/0xbc/0x7c/0x3c` — same 2-bit duration field as notes, pitch 60.
+- `P16`/`P32`/`P64`/`P128` → bytes `0xfd/0xbd/0x7d/0x3d` — same duration bits, but **pitch 61**
+  instead of 60: the extra pause range is a pitch-code acting as a x16 scale-extension bit, not a
+  wider duration field. `pause_length = duration_for_index[duration_index] * (16 if pitch==61 else 1)`
+  — an elegant encoding that fits the vendor's own documented 8 pause lengths exactly.
+
+Nothing about `Eep_Note_Array`'s encoding remains inferred. `research/notes/BLHeli-Music.en.md`
+(an unrelated public music-notation post, translated before this byte-level work) had already
+independently stated 4 note lengths, 4 octaves, and rests going "down to 1/128" — all now
+confirmed to match this board's real behavior exactly, resolving that note's earlier open caveat.
+
+`Eep_ESC_Mode` is now the only field name from the original 46 that remains genuinely unconfirmed.
 
 ## What's NOT decoded, and why
 
@@ -313,29 +387,38 @@ README states BLHeli_32 is literally "the third code developed" by the same proj
 (Atmel/SiLabs 8-bit, GPLv3) and BLHeli_S (SiLabs 8-bit, GPLv3, "focus was on making throttle
 response smooth"): a real generational rewrite for 32-bit ARM MCUs, explaining why field *names*
 persist while the byte layout was reworked for new hardware capability. **No public source
-exists** for BLHeli_32-only fields, since BLHeli_32 itself is closed-source. Remaining, after the
-2026-09-07 differential-capture pass and the 2026-09-08 cross-board correlation pass (see above)
-resolved every other known field name — only 3 names remain unconfirmed:
+exists** for BLHeli_32-only fields, since BLHeli_32 itself is closed-source (except where this
+project's own research corpus recovered offsets via disassembly — see `Eep_ESC_Layout` and
+`Eep_Note_Array` above). After the 2026-09-07 differential-capture pass, the 2026-09-08 cross-board
+correlation pass, and the 2026-09-08 research-corpus pass (all above) resolved every other known
+field name, only 1 name remains unconfirmed:
 
-- `Eep_Note_Array` — the actual melody note sequence (a separate field from `Eep_Note_Config`,
-  confirmed above at offset 28), likely a substantially different byte layout (variable-length
-  sequence); not attempted via any method above.
-- `Eep_ESC_Layout` — the layout/CPU identity string is separately recoverable via
-  `extract_identity_strings()`'s delimiter search, not a fixed numeric offset, so it doesn't fit
-  this module's offset-based `CONFIRMED_FIELDS` table the same way.
 - `Eep_ESC_Mode` — value `2` on all 3 boards tested, but that literal byte does not appear
   anywhere in the Reaper's 192-byte plaintext (see the cross-board correlation section above).
-  Genuinely unresolved, possibly not a directly-stored byte at all.
+  **Checked exhaustively (2026-09-08), genuinely exhausted, not just deferred**: the symbol name
+  `ESC_Mode`/`Eep_ESC_Mode` doesn't appear anywhere in this project's entire translated research
+  corpus (every `.en.md` note, including the same 2021/2024 disassembly passes that DID recover
+  `Eep_ESC_Layout`/`Eep_Note_Array`'s offsets — see the method section above); the vendor's own
+  bundled manual never documents an "ESC Mode" setting by that name; and the offset 34-47 gap (the
+  one unconfirmed stretch left in the already-explored region) is all `0xFF` sentinel on every
+  board tested, not hiding the value anywhere either. **One new lead, not yet followed up**: a real
+  screenshot of the app's read-only "ESC overview" tab (`Damaged_2026-09-08_090705.png`) shows a
+  row simply labeled "Mode", displaying "Multi" uniformly across all 4 ESCs on the damaged Reaper —
+  almost certainly this field's human-readable label for raw value `2`, though whether that tab's
+  "Mode" is genuinely read from the wire or a per-layout constant the app displays regardless of
+  device state is still unknown. Closing the byte-offset question further would need genuinely new
+  binary disassembly work against the compiled app — a materially larger undertaking than this
+  project's established method of translating already-published research, not attempted here.
 
-No offsets within the already-explored range (0-34, 48-55, 62-63) remain unconfirmed — every gap
-closeable by differential capture, direct `.ixi` cross-reference, or cross-board value correlation
-has been closed, see the confirmed-fields table above.
+No offsets within the already-explored range (0-34, 48-55, 62-63, 64-191) remain unconfirmed —
+every gap closeable by differential capture, direct `.ixi` cross-reference, cross-board value
+correlation, or this project's own research corpus has been closed, see the confirmed-fields table
+above.
 
-The 3 fields above have no way to disambiguate an offset by value-matching alone (`Eep_Note_Array`
-has no fixed single-byte encoding; `Eep_ESC_Layout` isn't a numeric offset; `Eep_ESC_Mode`'s value
-doesn't appear in the plaintext at all). **Decided approach**: don't guess.
-`setup_fields.decode_confirmed_fields()` returns only the confirmed fields, clearly labeled as
-partial everywhere it's surfaced (CLI output, module docstring).
+`Eep_ESC_Mode`'s value doesn't appear in the plaintext at all, so there's no byte pattern left to
+search for. **Decided approach**: don't guess. `setup_fields.decode_confirmed_fields()` returns
+only the confirmed fields, clearly labeled as partial everywhere it's surfaced (CLI output, module
+docstring).
 
 ## Cross-version field-name check (2026-09-05) — names mostly stable, one confirmed structural change
 
@@ -383,12 +466,12 @@ The raw byte-exact ciphertext/plaintext dump (already working, `fourwayif.read_f
 `dump-config --raw-dir`) remains the actual restore-safe backup mechanism regardless of
 field-decode completeness — it can't misinterpret anything since it's read back byte-for-byte, not
 reconstructed from named fields. **This module's output must still never drive a write-back/restore
-path** — 43 of 46 known field names confirmed as of 2026-09-08 is real progress (differential
-capture, direct `.ixi` cross-reference, and cross-board value correlation together), but 3 remain
-unconfirmed (`Eep_Note_Array`'s melody data, `Eep_ESC_Layout`, `Eep_ESC_Mode`). Reconstructing a
-full plaintext from only the confirmed fields would still leave those unknown bytes as guesses
-(zero-fill or whatever a template happens to contain) — exactly the kind of partial-write gap that
-caused real data loss in the write-test incident (see [Hardware
+path** — 45 of 46 known field names confirmed as of 2026-09-08 is real progress (differential
+capture, direct `.ixi` cross-reference, cross-board value correlation, and this project's own
+research corpus together), but 1 remains unconfirmed (`Eep_ESC_Mode`). Reconstructing a full
+plaintext from only the confirmed fields would still leave that unknown byte (plus any padding
+whose exact role isn't independently verified) as a guess — exactly the kind of partial-write gap
+that caused real data loss in the write-test incident (see [Hardware
 Findings](hardware-findings.md#write_flash-without-erase-first-corrupts-far-more-than-the-targeted-bytes-2026-09-07)),
 just via reconstruction gaps instead of an erase side effect. This module exists for read-only
 reporting and human comparison against a real `.ixi`; a real restore should always start from a

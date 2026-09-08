@@ -100,18 +100,46 @@ plaintext, at all, which suggests this field may not be a directly-stored byte i
 all (possibly derived from firmware/layout metadata the app already has, not read from the ESC).
 Left unconfirmed rather than guessed.
 
-BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms some field
-*names* but NOT these offsets or widths — BLHeli_32 (closed-source) widened
-several fields (e.g. throttle values: 1 scaled byte in BLHeli_S vs. 2 raw
-bytes here) and reordered others. No public source exists for BLHeli_32-only
-fields — remaining undecoded: `Eep_Note_Array` (melody note sequence, byte
-layout not attempted), `Eep_ESC_Layout` (recoverable via
-`extract_identity_strings()`'s delimiter search, not a fixed offset — not
-the same as a confirmed numeric offset), and `Eep_ESC_Mode` (see above — not
-even confirmed to be a literal stored byte). Do not guess offsets for these;
-leave them undecoded rather than emit a wrong value. In particular, never
-use this module's output to drive a write-back/restore path — it is
-read-only reporting, not a validated round-trip format.
+**`Eep_ESC_Layout` and `Eep_Note_Array` closed (2026-09-08), via this project's own research
+corpus**: `research/notes/BLHeliSuite32-Reverse3.en.md` (a real disassembly of the vendor's own
+`ReadSetupFromBinString`) documents fixed wire-format offsets for both fields directly from the
+vendor's own binary -- a lead not previously connected to this module's own empirical work.
+Cross-checked against every real board's raw plaintext already on file (AK32, Furling32, the
+Reaper): `Eep_ESC_Layout` (offset 64, 32 bytes, '#'-delimited ASCII) matched each board's own real
+`.ixi` value byte-exact in all 3 cases -- see `decode_esc_layout()`. `Eep_Note_Array` (offset 144,
+48 bytes) required deriving the actual note encoding (not just locating the offset): decoded 2
+distinct real Furling32 melodies (74 total note instances across octaves 4-6 and durations
+8th/4th/whole) plus AK32's melody (duration 8th only) plus the Reaper's empty state (all 0xFF),
+every one matching its board's own real `.ixi` text byte-for-byte -- see `decode_note_array()`'s
+comment for the exact encoding formula. **Fully closed same day** via a real differential test on
+the damaged Reaper (script `C42 P1 P2 P4 P8 P16 P32 P64 P128`, sourced directly from the vendor
+app's own Music Editor tooltip -- exact valid syntax, confirmed no guessing needed): confirmed the
+previously-untested half-note duration (`C42`), AND revealed pauses actually support 8 lengths
+(1/1 through 1/128), wider than notes' 4 -- decoded as the same 2-bit duration field combined with
+a pitch-code (60 vs 61) acting as a x16 scale bit. Every one of the 9 tokens in that real script
+decoded to an exact match. Nothing about this encoding remains inferred.
+
+**Only `Eep_ESC_Mode` remains unconfirmed** (see above — not even confirmed to be a literal stored
+byte). Checked exhaustively (2026-09-08) against every other available technique before writing it
+off: the symbol name `ESC_Mode`/`Eep_ESC_Mode` does not appear ANYWHERE in this project's entire
+translated research corpus (every `.en.md` note, including the 2021/2024 disassembly passes that
+DID recover `Eep_ESC_Layout`/`Eep_Note_Array`'s offsets); the vendor's own bundled manual never
+documents an "ESC Mode" setting by that name; and its value doesn't appear as a literal byte
+anywhere in a real board's 192-byte plaintext (checked on 3 independent boards/MCU vendors). One
+new lead, not yet followed up: a real screenshot of the app's read-only "ESC overview" tab shows a
+row simply labeled "Mode", displaying "Multi" (uniformly, across all 4 ESCs on the damaged Reaper)
+-- almost certainly this field's human-readable label for the raw value `2`, though whether that
+tab's "Mode" is genuinely read from the wire or a per-layout constant the app displays regardless
+of what's on the device is still unknown. Closing the byte-offset question further would need
+genuinely new binary disassembly work (OllyDbg/IDA against the compiled app), a materially
+different and much larger undertaking than this project's established method of translating
+already-published research. BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms some
+field *names* but NOT these offsets or widths — BLHeli_32 (closed-source) widened several fields
+(e.g. throttle values: 1 scaled byte in BLHeli_S vs. 2 raw bytes here) and reordered others. Do not
+guess an offset for `Eep_ESC_Mode`; leave it undecoded rather than emit a wrong value. In
+particular, never use this
+module's output to drive a write-back/restore path — it is read-only reporting, not a validated
+round-trip format.
 """
 
 from __future__ import annotations
@@ -199,6 +227,79 @@ def decode_name(plaintext: bytes) -> str:
     return raw.decode("ascii", errors="replace").rstrip(" ")
 
 
+# Eep_ESC_Layout: confirmed 2026-09-08, fixed offset — this project's own research corpus
+# (research/notes/BLHeliSuite32-Reverse3.en.md, a real disassembly of the vendor's own
+# ReadSetupFromBinString) documents this exact wire-format offset directly from the vendor's own
+# binary. Cross-checked against already-captured raw plaintext from all 3 real boards on file
+# (AK32, Furling32, the Reaper): byte-exact match to each board's own real `.ixi` value in every
+# case. `extract_identity_strings()` below is kept as the more robust general-purpose delimiter
+# search (handles the ESC_CPU string too, which has no `.ixi` field name of its own so isn't
+# tracked here) — this fixed offset is an additional, independently-confirmed fact, not a
+# replacement.
+EEP_ESC_LAYOUT_OFFSET = 64
+EEP_ESC_LAYOUT_WIDTH = 32
+
+
+def decode_esc_layout(plaintext: bytes) -> str:
+    """Decode Eep_ESC_Layout (offset 64, 32 bytes, '#'-delimited ASCII, space-padded) — see
+    EEP_ESC_LAYOUT_OFFSET's comment. Strips the padding and delimiters, matching how a real
+    .ixi's Eep_ESC_Layout value appears (e.g. "Aikon_AK32_4IN1_35A_6S_V1_0")."""
+    if EEP_ESC_LAYOUT_OFFSET + EEP_ESC_LAYOUT_WIDTH > len(plaintext):
+        raise ValueError(f"plaintext too short ({len(plaintext)} bytes) for Eep_ESC_Layout")
+    raw = plaintext[EEP_ESC_LAYOUT_OFFSET : EEP_ESC_LAYOUT_OFFSET + EEP_ESC_LAYOUT_WIDTH]
+    return raw.decode("ascii", errors="replace").rstrip(" ").strip("#")
+
+
+# Eep_Note_Array: confirmed 2026-09-08, fixed offset 144, 48 bytes — same research-corpus lead as
+# Eep_ESC_Layout above (Reverse3.en.md documents this offset from the vendor's own binary).
+# Encoding derived and cross-validated against all 4 real boards' actual melodies/empty state,
+# byte-exact against each board's own real `.ixi` Eep_Note_Array text:
+#   byte = (duration_index << 6) | pitch
+#   pitch 0-59: a real note, pitch = 16*(octave-4) + chromatic_semitone (C=0..B=11)
+#   pitch 60/61: a rest/pause ("P"); pause_length = duration_for_index[duration_index] * (16 if
+#     pitch == 61 else 1) -- reuses the same 2-bit duration field as notes, with the pitch code
+#     acting as a x16 scale-extension bit, giving exactly the 8 pause lengths (1,2,4,8,16,32,64,128)
+#     the vendor app's own Music Editor tooltip documents (wider than the 4 lengths notes get)
+#   duration_index: 0=8th, 1=4th, 2=half, 3=whole
+# Confirmed via 2 distinct real Furling32 melodies (74 total note instances, octaves 4-6, durations
+# 8/4/1), AK32's melody (duration 8 only), the Reaper's empty state (all 0xFF), and a real
+# differential test on the Reaper (2026-09-08) covering the previously-untested half-note duration
+# and all 8 documented pause lengths -- every case matches exactly. Fully empirically confirmed,
+# nothing inferred. Unrecognized byte patterns (pitch 62/63, or semitone >=12) are emitted as "?xx"
+# (hex) rather than guessed -- never observed in any real capture.
+EEP_NOTE_ARRAY_OFFSET = 144
+EEP_NOTE_ARRAY_WIDTH = 48
+_NOTE_ARRAY_DURATION_FOR_INDEX = {0: 8, 1: 4, 2: 2, 3: 1}
+_NOTE_ARRAY_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+
+def decode_note_array(plaintext: bytes) -> str:
+    """Decode Eep_Note_Array (offset 144, 48 bytes) into the same concatenated note-token text a
+    real .ixi shows (e.g. "C68G58C68..."), stopping at the first 0xFF (unused slot). See
+    EEP_NOTE_ARRAY_OFFSET's comment for the encoding."""
+    if EEP_NOTE_ARRAY_OFFSET + EEP_NOTE_ARRAY_WIDTH > len(plaintext):
+        raise ValueError(f"plaintext too short ({len(plaintext)} bytes) for Eep_Note_Array")
+    raw = plaintext[EEP_NOTE_ARRAY_OFFSET : EEP_NOTE_ARRAY_OFFSET + EEP_NOTE_ARRAY_WIDTH]
+    tokens = []
+    for b in raw:
+        if b == 0xFF:
+            break
+        duration_index = (b >> 6) & 0x3
+        pitch = b & 0x3F
+        base_duration = _NOTE_ARRAY_DURATION_FOR_INDEX[duration_index]
+        if pitch in (60, 61):
+            multiplier = 16 if pitch == 61 else 1
+            tokens.append(f"P{base_duration * multiplier}")
+        else:
+            semitone = pitch % 16
+            if semitone < 12:
+                octave = 4 + pitch // 16
+                tokens.append(f"{_NOTE_ARRAY_NAMES[semitone]}{octave}{base_duration}")
+            else:
+                tokens.append(f"?{b:02x}")
+    return "".join(tokens)
+
+
 def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
     """Extract the board-layout name and MCU string directly from the real
     Setup block, e.g. "#Furling32_4in1_C#...#BLHeli_32*GD32F350x6#" ->
@@ -225,23 +326,33 @@ def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
 
 IXI_PARTIAL_BACKUP_WARNING = (
     "; Partial backup written by blheli32proxy — confirmed fields only (see\n"
-    "; protocol/setup_fields.py). NOT a complete .ixi: missing Eep_ESC_Layout,\n"
-    "; Eep_ESC_Mode, and Eep_Note_Array. Do not load this into BLHeliSuite32xl\n"
-    "; or any other tool expecting a real .ixi — it will misinterpret the\n"
-    "; missing fields.\n"
+    "; protocol/setup_fields.py). NOT a complete .ixi: missing Eep_ESC_Mode.\n"
+    "; Do not load this into BLHeliSuite32xl or any other tool expecting a\n"
+    "; real .ixi — it will misinterpret the missing field.\n"
 )
 
 
-def format_ixi_section(esc_index: int, fields: dict[str, int], name: str | None = None) -> str:
+def format_ixi_section(
+    esc_index: int,
+    fields: dict[str, int],
+    name: str | None = None,
+    layout: str | None = None,
+    note_array: str | None = None,
+) -> str:
     """Format confirmed fields as one `[ESCn]` section (1-based, matching
     BLHeliSuite32xl's real .ixi numbering) for a partial backup file. Emits
-    only CONFIRMED_FIELDS (plus Eep_Name, first, if `name` is given — matching
-    a real .ixi's own field order), never fabricating the unconfirmed fields
-    to make this look like a complete backup. `name` is optional and omitted
-    by default so existing callers that don't have it need no changes."""
+    only CONFIRMED_FIELDS (plus Eep_Name/Eep_ESC_Layout/Eep_Note_Array, first,
+    if given — matching a real .ixi's own field order), never fabricating the
+    unconfirmed fields to make this look like a complete backup. All three
+    extra params are optional and omitted by default so existing callers that
+    don't have them need no changes."""
     lines = [f"[ESC{esc_index + 1}]"]
+    if layout is not None:
+        lines.append(f"Eep_ESC_Layout={layout}")
     if name is not None:
         lines.append(f"Eep_Name={name}")
     for field_name in CONFIRMED_FIELDS:
         lines.append(f"{field_name}={fields[field_name]}")
+    if note_array is not None:
+        lines.append(f"Eep_Note_Array={note_array}")
     return "\n".join(lines) + "\n"

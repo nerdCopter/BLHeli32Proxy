@@ -220,6 +220,35 @@ This closes the field-name-confirmation effort to only 3 genuinely remaining nam
 `Eep_Note_Array`, `Eep_ESC_Layout`, `Eep_ESC_Mode` — 43 of 46 known `.ixi` field names now
 confirmed.
 
+**`Eep_ESC_Layout` and `Eep_Note_Array` closed too, same day, via this project's own research
+corpus**: re-reading `research/notes/BLHeliSuite32-Reverse3.en.md` (a real disassembly of the
+vendor's own binary, done in 2021 and already translated into this repo) turned up a fixed
+wire-format offset table straight from the vendor's own code — `Eep_ESC_Layout` at offset 64 (32
+bytes) and `Eep_Note_Array` at offset 144 (48 bytes) — a lead not previously connected to this
+project's own empirical offset-hunting. No new hardware interaction needed: cross-checked directly
+against raw plaintext already captured from all 3 boards (AK32, Furling32, this Reaper).
+`Eep_ESC_Layout` matched each board's own real `.ixi` value byte-exact in all 3 cases.
+`Eep_Note_Array`'s actual note *encoding* (not just the offset) was derived from scratch and
+verified against 2 distinct real Furling32 melodies (74 total note instances) plus AK32's melody
+plus this Reaper's empty state — every one matched its board's own `.ixi` text byte-for-byte. At
+this point one piece (duration index 2, "half note") was still inferred by pattern rather than
+seen in a real capture — closed next, same day, see below.
+
+**`Eep_Note_Array`'s encoding fully closed, same day**: the vendor app's own Music Editor has a
+tooltip documenting its exact script syntax — a detail not in the manual or this project's
+research corpus. It revealed pauses support 8 lengths (1/1 through 1/128), wider than notes' 4.
+Typed the exact script `C42 P1 P2 P4 P8 P16 P32 P64 P128` into this Reaper's ESC1, Write Setup,
+read back
+([`dumps/esc0-setup-20260908-103942.bin`](../../dumps/esc0-setup-20260908-103942.bin)). All 9
+tokens matched exactly — confirmed the previously-untested half-note duration and derived the
+extended-pause encoding (a pitch-code acting as a x16 scale bit). Nothing about this field's
+encoding remains inferred. Full formula in [Setup Block
+Fields](setup-block-fields.md#method--eep_esc_layout-and-eep_note_array-closed-via-this-projects-own-research-corpus-2026-09-08).
+
+**45 of 46 known `.ixi` field names now confirmed — only `Eep_ESC_Mode` remains, and that gap is
+genuinely exhausted** (checked against every available technique — see [Setup Block
+Fields](setup-block-fields.md#whats-not-decoded-and-why)), not just deferred.
+
 **Fourth reproduction (2026-09-05)**: a fourth aircraft, `Furling32_4in1_C - Rev. 32.9`, bootloader
 `k` (a third distinct bootloader letter, after `h` and `m`) — same exact crash address again.
 Status check saved: [Suite-Check-Furling32-4in1-C.txt](Suite-Check-Furling32-4in1-C.txt) (this
