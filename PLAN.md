@@ -55,7 +55,7 @@ Summary:
 | # | Goal | Status |
 |---|---|---|
 | 1 | Backups (config/Setup-block data) | Mostly complete |
-| 2 | Firmware dumps (executable code) | Reopened 2026-09-08 — RDP still blocks direct reads, but the Verify-oracle brute-force path is now measured feasible (~2-4 days/board) and being pursued |
+| 2 | Firmware dumps (executable code) | Reopened, then blocked again 2026-09-08 — RDP still blocks direct reads, and the Verify-oracle brute-force path was found to have a real correctness bug (sub-8-byte/misaligned Verify unreliable even for correct bytes); needs a fix before feasibility can be re-assessed |
 | 3 | Bootloader unlock (AM32, no soldering) | Closed — confirmed impossible as scoped |
 | 4 | Proxy/licensing intercept (original goal) | In progress — fully staged, one decision from capturing the real activation call |
 
@@ -134,23 +134,69 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
 
 ## 7. Backlog
 
-- **Goal 2 (firmware dumps) reopened via Verify-oracle brute force — feasibility measured, not yet
-  attempted at scale (2026-09-08).** RDP still blocks direct `cmd_DeviceRead`, but `dump-firmware`'s
-  `--discover-unresolved` flag (already built, `fw.discover_byte()`, up to 256 `cmd_DeviceVerify`
-  guesses/byte, no write/erase risk) makes byte-by-byte recovery genuinely possible. Ran a real
-  verify-diff against the damaged Reaper (32.10.0) using the closest available candidate (32.9.5,
-  no exact-version file exists) — only 9.4% matched (2,240/23,808 bytes), leaving 21,568 unresolved
-  bytes. Measured real per-call latency directly: **0.060s/call**, giving a real estimate of
-  **~2-4 days of continuous round-trips** for the full unresolved region (worst case 92h, average
-  case 46h) — a genuine multi-day undertaking, but not the multi-week-or-more result the first,
-  confounded timing attempt suggested. See [Hardware
-  Findings](docs/knowledge/hardware-findings.md#goal-2-brute-force-feasibility--discover-unresolved-real-numbers-2026-09-08)
-  for the full account, including a real robustness gap found along the way: killing a process
-  mid-4-way-if session (even via a safety `timeout` wrapper) sticks the FC's MSP passthrough state,
-  recoverable only by physically replugging its USB cable — no software recovery path exists.
-  **Not yet attempted at full scale**: the current CLI has no checkpoint/resume support, so a
-  multi-day unattended run risks losing all progress (and needing a physical replug) on any
-  interruption. A resumable design should exist before attempting the real run.
+- **Goal 2 (firmware dumps) reopened via Verify-oracle brute force, then blocked again by a real
+  correctness bug — checkpoint/resume built and confirmed working, but the underlying technique
+  needs a redesign before it can recover anything (2026-09-08).** RDP still blocks direct
+  `cmd_DeviceRead`, but `dump-firmware`'s `--discover-unresolved` flag (already built,
+  `fw.discover_byte()`, up to 256 `cmd_DeviceVerify` guesses/byte, no write/erase risk) was meant to
+  make byte-by-byte recovery possible. Ran a real verify-diff against the damaged Reaper (32.10.0)
+  using the closest available candidate (32.9.5, no exact-version file exists) — only 9.4% matched
+  (2,240/23,808 bytes), leaving 21,568 unresolved bytes.
+  - **Checkpoint/resume: built and confirmed working.** Added `--checkpoint FILE` (appends resolved
+    bytes immediately, resumes by skipping known addresses) and caught `SIGTERM` to convert it into
+    the same `KeyboardInterrupt` `Ctrl-C` already raised, fixing the stuck-FC-passthrough gap found
+    earlier the same day. Confirmed live: interrupted a run mid-brute-force, resumed with no
+    physical replug needed, checkpointed byte correctly skipped.
+  - **The brute-force technique itself is unsound, found while testing the above.** Every byte
+    tested (18 for 18, across two separated regions) came back "undiscoverable" — investigated
+    instead of accepting it, and found `cmd_DeviceVerify` with a payload shorter than 8 bytes, or
+    not 8-byte-aligned, can report a mismatch **even for the objectively correct byte** (reproduced
+    3x, and as a fresh session's first call — not a caching/state artifact). Full-length
+    (≥8 bytes), 8-byte-aligned verify calls remain reliable. This means `discover_byte()`'s 1-byte
+    guesses are unsound exactly where they're needed (any address near a real mismatch), and the
+    18 "undiscoverable" bytes found this session are very likely a tool bug, not real anomalies.
+    **The earlier "~2-4 days, feasible" estimate is retracted** — it assumed a correct guess would
+    actually be recognized as a match, which is now known false near real divergences. See
+    [Hardware
+    Findings](docs/knowledge/hardware-findings.md#critical-cmd_deviceverify-is-unreliable-below-8-bytes--when-misaligned-2026-09-08)
+    for the full investigation.
+  - **Fixed, same day: `fw.discover_window()`.** Guesses within a real, reliable 8-byte-aligned
+    window (`known` values held fixed, `unknown_offsets` swept combinatorially,
+    `256^len(unknown_offsets)` calls) instead of a bare byte. `dump-firmware --discover-unresolved`
+    now groups unresolved bytes into their containing windows; a new `--max-combo` flag (default 1)
+    skips any window needing more simultaneous guesses than that, rather than falsely reporting
+    `UNDISCOVERABLE`. Unit-tested (k=1, k=2, no-match, both validation errors).
+  - **Validated against real hardware, sobering result**: bisected 2 real 32-byte unresolved
+    chunks down to their actual mismatching 8-byte window (`0x2400+32` → `0x2418-0x241f`;
+    `0x2420+32` → `0x2430-0x2437`), then tested all 8 single-position (k=1) hypotheses per window
+    (16 total real exhaustive searches). **All 16 came back with no match** — every real mismatch
+    found so far involves 2+ simultaneously-different bytes, not one isolated byte. This confirms
+    `discover_window()` works correctly (clean, consistent negatives, no false positives, no stuck
+    FC across any of it) but suggests **real cross-firmware-version differences cluster in
+    multi-byte groups** (a changed instruction, an updated constant), the opposite of what
+    byte-by-byte brute-forcing assumes — meaning a real gap may stay mostly unrecoverable via this
+    oracle regardless of the length/alignment fix, unless a much closer candidate is available.
+    `--max-combo 2` (65,536 guesses, ~1hr/window) not yet tried against either confirmed window.
+  - **Two corrections found while double-checking the "18 undiscoverable" claim**: (1) the
+    `0x74d8`+ region has **zero candidate data at all** (a gap, not a verified mismatch — this
+    project's own `_verify_region` docstring already distinguishes the two, this just wasn't a
+    meaningful test of the bug); (2) `0x2410`-`0x2411`'s "unresolved" status was itself a false
+    positive from an earlier ad-hoc 2-byte verify test — re-checked properly with a real 8-byte
+    call, **it actually matches the candidate exactly**. This also exposed a latent gap in
+    `_verify_region` generally (not just `--discover-unresolved`): it can issue an unreliable
+    sub-8-byte verify whenever a caller's `--start`/`--end` range is narrower than 8 bytes — **not
+    yet fixed**, no guard exists today. Full account: [Hardware
+    Findings](docs/knowledge/hardware-findings.md#critical-cmd_deviceverify-is-unreliable-below-8-bytes--when-misaligned-2026-09-08).
+  - **Follow-up, not yet started**: (1) add a guard to `_verify_region` refusing/widening any
+    sub-8-byte verify request; (2) re-scan the original 32-byte-granularity "unresolved" chunks at
+    proper 8-byte granularity to find which windows have how many genuinely-unknown bytes (the true
+    recoverable fraction is likely smaller than the raw 21,568-byte gap, now that `0x2410`-`0x2417`
+    turned out to fully match) before attempting any real brute-force recovery; (3) this project's
+    own data already has windows with multiple simultaneously-unknown bytes (the `0x74d8`-`0x74e7`
+    gap spans two fully-unknown windows, though see correction above about it being a gap, not a
+    mismatch) — `256^k` guesses for `k` unknowns is infeasible at `k≥2` already, so whether any
+    real *mismatching* multi-byte window is recoverable via this oracle at all remains an open
+    question.
 
 - **AM32 flashing without soldering — closed, confirmed not possible.** BLHeli_32 sets the STM32's
   Read-Out Protection (RDP) fuse; converting to AM32 always requires physically soldering SWD

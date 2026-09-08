@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -558,6 +559,48 @@ def _default_firmware_dump_name(candidate_path: str) -> str:
     return f"dumps/BLHeli32_{model} - Rev. {version} - AppCode_{date.today():%y%m%d}.bin"
 
 
+def _load_checkpoint(path: Path) -> tuple[dict[int, int], set[int]]:
+    """Load a --discover-unresolved checkpoint file: one `<addr> <value>` or
+    `<addr> UNDISCOVERABLE` line per byte a prior (possibly interrupted) run already resolved.
+    Missing file is not an error (first run). A malformed line is skipped with a warning, never
+    fatal — a checkpoint is a resume aid, not a source of truth that must be perfect."""
+    discovered: dict[int, int] = {}
+    undiscoverable: set[int] = set()
+    if not path.exists():
+        return discovered, undiscoverable
+    for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 2:
+            print(f"Warning: checkpoint {path} line {lineno}: malformed, skipping: {line!r}", file=sys.stderr)
+            continue
+        try:
+            addr = int(parts[0], 0)
+        except ValueError:
+            print(f"Warning: checkpoint {path} line {lineno}: bad address, skipping: {line!r}", file=sys.stderr)
+            continue
+        if parts[1] == "UNDISCOVERABLE":
+            undiscoverable.add(addr)
+            continue
+        try:
+            discovered[addr] = int(parts[1], 0)
+        except ValueError:
+            print(f"Warning: checkpoint {path} line {lineno}: bad value, skipping: {line!r}", file=sys.stderr)
+    return discovered, undiscoverable
+
+
+def _append_checkpoint(path: Path, addr: int, value: int | None) -> None:
+    """Append one resolved byte to the checkpoint file, fsync'd immediately — a kill (SIGKILL, a
+    power loss) right after this call still only re-does the one in-flight byte on resume, never
+    more, since every prior line is already durable on disk."""
+    with path.open("a") as f:
+        f.write(f"{addr:#06x} UNDISCOVERABLE\n" if value is None else f"{addr:#06x} {value:#04x}\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def _cmd_dump_firmware(args: argparse.Namespace) -> int:
     """Extract application-code flash content via the cmd_DeviceVerify oracle
     (RDP blocks raw cmd_DeviceRead there, but Verify still discriminates
@@ -577,7 +620,6 @@ def _cmd_dump_firmware(args: argparse.Namespace) -> int:
     making this command correct for any BLHeli32 model without per-model
     configuration."""
     from .protocol import hexfile
-    from .protocol.transport import SerialTransport
 
     if args.motor_index is None:
         print("dump-firmware requires --motor-index (FC-passthrough only).", file=sys.stderr)
@@ -605,6 +647,53 @@ def _cmd_dump_firmware(args: argparse.Namespace) -> int:
 
     print(f"Loaded {len(candidates)} candidate file(s): {', '.join(args.candidate)}")
 
+    checkpoint_path = Path(args.checkpoint).expanduser().resolve() if args.checkpoint else None
+    checkpoint_discovered: dict[int, int] = {}
+    checkpoint_undiscoverable: set[int] = set()
+    if checkpoint_path is not None:
+        checkpoint_discovered, checkpoint_undiscoverable = _load_checkpoint(checkpoint_path)
+        if checkpoint_discovered or checkpoint_undiscoverable:
+            print(f"Resuming from checkpoint {checkpoint_path}: "
+                  f"{len(checkpoint_discovered)} byte(s) already discovered, "
+                  f"{len(checkpoint_undiscoverable)} already known undiscoverable.")
+
+    # Convert SIGTERM into the same KeyboardInterrupt Ctrl-C already raises, so a `timeout`
+    # wrapper or `kill` (not -9) still unwinds through the finally block below and calls
+    # exit_interface() -- confirmed missing this (2026-09-08) leaves the FC's own MSP passthrough
+    # state stuck, recoverable only by a physical USB replug. See docs/knowledge/hardware-findings.md.
+    def _raise_keyboard_interrupt(signum, frame):
+        raise KeyboardInterrupt()
+
+    previous_sigterm_handler = signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
+
+    try:
+        return _dump_firmware_body(
+            args, candidates, start, end, checkpoint_path, checkpoint_discovered, checkpoint_undiscoverable
+        )
+    except KeyboardInterrupt:
+        print("\nInterrupted — cleanly exited the 4-way-if session.", file=sys.stderr)
+        if checkpoint_path is not None:
+            print(f"Progress saved to checkpoint {checkpoint_path} — resume with the same "
+                  f"--checkpoint {checkpoint_path} (and the same --candidate/--start/--end) to "
+                  f"continue.", file=sys.stderr)
+        return 130
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm_handler)
+
+
+def _dump_firmware_body(
+    args: argparse.Namespace,
+    candidates: list[dict[int, int]],
+    start: int,
+    end: int,
+    checkpoint_path: Path | None,
+    checkpoint_discovered: dict[int, int],
+    checkpoint_undiscoverable: set[int],
+) -> int:
+    """The actual dump-firmware work, split out of _cmd_dump_firmware so the outer function can
+    wrap it in one try/except KeyboardInterrupt (see _cmd_dump_firmware's SIGTERM handling)."""
+    from .protocol import hexfile
+    from .protocol.transport import SerialTransport
     from .protocol import fourwayif as fw
 
     transport = SerialTransport(args.port)
@@ -681,27 +770,96 @@ def _cmd_dump_firmware(args: argparse.Namespace) -> int:
             print(f"{len(unresolved_ranges)} unresolved range(s): " + ", ".join(f"{a:#06x}+{n}" for a, n in unresolved_ranges))
 
         if args.discover_unresolved and unresolved_ranges:
-            total_unresolved = sum(n for _, n in unresolved_ranges)
-            print(f"\nBrute-force discovering {total_unresolved} unresolved byte(s) "
-                  f"(up to 256 tries each — this is slow, real hardware round-trips)...")
+            unresolved_addrs = {
+                range_addr + offset for range_addr, range_len in unresolved_ranges for offset in range(range_len)
+            }
+            total_unresolved = len(unresolved_addrs)
+            print(f"\nBrute-force discovering {total_unresolved} unresolved byte(s) via real, "
+                  f"8-byte-aligned cmd_DeviceVerify windows (fixed 2026-09-08 — see "
+                  f"docs/knowledge/hardware-findings.md; bare 1-byte guessing is unsound). A window "
+                  f"with k simultaneously-unknown bytes costs 256^k guesses — windows needing more "
+                  f"than --max-combo={args.max_combo} are skipped, not attempted.")
             undiscoverable: list[int] = []
+            insufficient_data: list[int] = []
+            too_many_unknowns: list[int] = []
+            from_checkpoint = 0
             done = 0
-            for range_addr, range_len in unresolved_ranges:
-                for offset in range(range_len):
-                    a = range_addr + offset
-                    done += 1
-                    value = fw.discover_byte(transport, a)
-                    if value is None:
-                        undiscoverable.append(a)
-                        print(f"  {a:#06x}: UNDISCOVERABLE (no value 0-255 matched — real anomaly) "
-                              f"({done}/{total_unresolved})")
+
+            for window_addr in sorted({a - (a % 8) for a in unresolved_addrs}):
+                window_unresolved = [window_addr + i for i in range(8) if (window_addr + i) in unresolved_addrs]
+                still_needed = [a for a in window_unresolved if a not in checkpoint_discovered and a not in checkpoint_undiscoverable]
+                for a in window_unresolved:
+                    if a not in still_needed:
+                        done += 1
+                        from_checkpoint += 1
+                        if a in checkpoint_discovered:
+                            confirmed[a] = checkpoint_discovered[a]
+                        else:
+                            undiscoverable.append(a)
+                if not still_needed:
+                    continue
+
+                known: dict[int, int] = {}
+                unknown_offsets: list[int] = []
+                window_complete = True
+                for i in range(8):
+                    a = window_addr + i
+                    if a in confirmed:
+                        known[i] = confirmed[a]
+                    elif a in checkpoint_discovered:
+                        known[i] = checkpoint_discovered[a]
+                    elif a in unresolved_addrs:
+                        unknown_offsets.append(i)
                     else:
-                        confirmed[a] = value
-                        print(f"  {a:#06x}: discovered {value:#04x} ({done}/{total_unresolved})", end="\r")
-            print(f"\nDiscovered {total_unresolved - len(undiscoverable)}/{total_unresolved} unresolved byte(s).")
+                        window_complete = False
+                        break
+
+                if not window_complete:
+                    insufficient_data.extend(still_needed)
+                    done += len(still_needed)
+                    continue
+                if len(unknown_offsets) > args.max_combo:
+                    too_many_unknowns.extend(window_addr + i for i in unknown_offsets)
+                    done += len(still_needed)
+                    continue
+
+                result = fw.discover_window(transport, window_addr, known, unknown_offsets)
+                done += len(still_needed)
+                if result is None:
+                    for i in unknown_offsets:
+                        a = window_addr + i
+                        undiscoverable.append(a)
+                        if checkpoint_path is not None:
+                            _append_checkpoint(checkpoint_path, a, None)
+                    print(f"  window {window_addr:#06x}: UNDISCOVERABLE for offset(s) "
+                          + ", ".join(f"+{i}" for i in unknown_offsets) + f" ({done}/{total_unresolved})")
+                else:
+                    for i in unknown_offsets:
+                        a = window_addr + i
+                        confirmed[a] = result[i]
+                        if checkpoint_path is not None:
+                            _append_checkpoint(checkpoint_path, a, result[i])
+                    print(f"  window {window_addr:#06x}: discovered "
+                          + ", ".join(f"+{i}={result[i]:#04x}" for i in unknown_offsets)
+                          + f" ({done}/{total_unresolved})", end="\r")
+
+            if from_checkpoint:
+                print(f"\n{from_checkpoint} byte(s) resumed from checkpoint, no round-trip needed.")
+            if too_many_unknowns:
+                print(f"\n{len(too_many_unknowns)} byte(s) skipped — their window has more "
+                      f"simultaneously-unknown bytes than --max-combo={args.max_combo} allows: "
+                      + ", ".join(f"{a:#06x}" for a in too_many_unknowns))
+            if insufficient_data:
+                print(f"\n{len(insufficient_data)} byte(s) skipped — their 8-byte window extends "
+                      f"outside the scanned [--start, --end) range: "
+                      + ", ".join(f"{a:#06x}" for a in insufficient_data))
+            resolved = total_unresolved - len(undiscoverable) - len(too_many_unknowns) - len(insufficient_data)
+            print(f"\nDiscovered {resolved}/{total_unresolved} unresolved byte(s) via reliable "
+                  f"8-byte-aligned windows.")
             if undiscoverable:
-                print(f"{len(undiscoverable)} byte(s) genuinely undiscoverable: "
-                      + ", ".join(f"{a:#06x}" for a in undiscoverable))
+                print(f"{len(undiscoverable)} byte(s) genuinely UNDISCOVERABLE — exhaustively tried every "
+                      f"combination via a real, aligned verify window (reliable, unlike the old bare "
+                      f"1-byte method): " + ", ".join(f"{a:#06x}" for a in undiscoverable))
             print(f"Now {len(confirmed)}/{total} bytes known ({100 * len(confirmed) / total:.1f}%).")
 
         with out_path.open("wb") as f:
@@ -918,9 +1076,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_dumpfw.add_argument(
         "--discover-unresolved",
         action="store_true",
-        help="after comparing against candidates, brute-force discover every remaining unresolved "
-        "byte by trying values 0-255 via cmd_DeviceVerify (no candidate needed, but slow — up to "
-        "256 real round-trips per byte). Only reasonable when few bytes remain unresolved.",
+        help="brute-force discover every remaining unresolved byte via real, 8-byte-aligned "
+        "cmd_DeviceVerify windows (fw.discover_window()) — the fixed replacement (2026-09-08) for "
+        "an earlier bare-1-byte-guess design confirmed unsound (see "
+        "docs/knowledge/hardware-findings.md's \"CRITICAL: cmd_DeviceVerify is unreliable below 8 "
+        "bytes\" section). A window with k simultaneously-unknown bytes costs 256^k guesses — see "
+        "--max-combo. Only reasonable with --checkpoint for anything but a handful of bytes; a "
+        "multi-day run needs to survive interruption.",
+    )
+    p_dumpfw.add_argument(
+        "--max-combo",
+        type=int,
+        default=1,
+        help="skip (not attempt) any 8-byte-aligned window with more than this many simultaneously "
+        "-unknown bytes, since the cost is 256^k round-trips — 1 (default) costs the same 256 "
+        "guesses as a single unknown byte always did; 2 costs up to 65,536 (~1 hour at the "
+        "measured 0.06s/guess); 3+ is generally impractical. No effect without "
+        "--discover-unresolved.",
+    )
+    p_dumpfw.add_argument(
+        "--checkpoint",
+        default=None,
+        help="resume-support file for --discover-unresolved: appended to as each byte is "
+        "resolved, and read back at startup to skip already-known bytes. Safe to Ctrl-C or kill "
+        "and resume later with the same --checkpoint path (SIGTERM/SIGINT during the brute-force "
+        "loop are caught to cleanly exit the 4-way-if session first, matching this project's own "
+        "confirmed finding that an uncaught kill mid-session sticks the FC's passthrough state — "
+        "see docs/knowledge/hardware-findings.md). No effect without --discover-unresolved.",
     )
     p_dumpfw.add_argument(
         "--motor-index",

@@ -255,11 +255,64 @@ def discover_byte(transport, addr: int, timeout: float = 2.0) -> int | None:
     value 0-255 via verify_flash() until one matches — the last resort when
     no candidate covers this address at all. Up to 256 real round-trips for
     one byte; only reasonable for a small number of genuinely unresolved
-    bytes, never a whole unknown region. Returns None (a real anomaly, not
-    expected in normal operation) if no value 0-255 matches."""
+    bytes, never a whole unknown region.
+
+    **KNOWN UNSOUND (2026-09-08), do not trust a None result as a real anomaly**: a 1-byte
+    verify_flash() call can return False even for the objectively correct value, specifically near
+    a real content divergence -- confirmed directly on real hardware (a confirmed-correct byte at
+    an unaligned address failed 3 times in a row, including as a session's first call, ruling out
+    caching/state). Full-length (>=8 bytes), 8-byte-aligned verify calls remain reliable. Every
+    genuinely-unresolved address is, by definition, near a real divergence -- exactly the condition
+    under which this function is unsound. See docs/knowledge/hardware-findings.md's "CRITICAL:
+    cmd_DeviceVerify is unreliable below 8 bytes / when misaligned" section before trusting or
+    acting on any output from this function. Not yet fixed -- a correct version would guess within
+    an 8-byte-aligned window (holding already-known neighbor bytes fixed), not a bare single byte."""
     for value in range(256):
         if verify_flash(transport, addr, bytes([value]), timeout):
             return value
+    return None
+
+
+def discover_window(
+    transport,
+    window_addr: int,
+    known: dict[int, int],
+    unknown_offsets: list[int],
+    timeout: float = 2.0,
+) -> dict[int, int] | None:
+    """Brute-force discover 1+ unknown bytes within one real, reliable 8-byte-aligned
+    cmd_DeviceVerify window -- the fixed replacement for discover_byte()'s unsound bare 1-byte
+    guessing (see docs/knowledge/hardware-findings.md's "CRITICAL: cmd_DeviceVerify is unreliable
+    below 8 bytes / when misaligned", 2026-09-08: a 1-byte verify can report a mismatch even for
+    the objectively correct value near a real content divergence; full-length, 8-byte-aligned
+    verify calls are confirmed reliable).
+
+    `window_addr` must be 8-byte-aligned. `known` maps offset (0-7, relative to `window_addr`) to
+    its already-confirmed byte value for every position in the window NOT in `unknown_offsets` --
+    every position 0-7 must appear in exactly one of `known` or `unknown_offsets`. Tries every
+    combination of the unknown positions (256^len(unknown_offsets) round-trips worst case -- only
+    practical for a handful of simultaneously-unknown bytes in one window; the caller is
+    responsible for not calling this with more than it can afford) via one real 8-byte verify_flash
+    call per combination, holding the known bytes fixed. Returns a dict of offset->value for every
+    position in the window (both previously-known and newly-discovered) on the first matching
+    combination, or None if every combination was exhausted with no match -- a genuine anomaly this
+    time, not the unreliable 1-byte case discover_byte() suffers from."""
+    import itertools
+
+    if window_addr % 8 != 0:
+        raise ValueError(f"window_addr must be 8-byte-aligned, got {window_addr:#06x}")
+    if set(known) | set(unknown_offsets) != set(range(8)) or set(known) & set(unknown_offsets):
+        raise ValueError("known and unknown_offsets together must partition exactly {0..7}")
+
+    base = bytearray(8)
+    for offset, value in known.items():
+        base[offset] = value
+
+    for combo in itertools.product(range(256), repeat=len(unknown_offsets)):
+        for offset, value in zip(unknown_offsets, combo):
+            base[offset] = value
+        if verify_flash(transport, window_addr, bytes(base), timeout):
+            return {offset: base[offset] for offset in range(8)}
     return None
 
 

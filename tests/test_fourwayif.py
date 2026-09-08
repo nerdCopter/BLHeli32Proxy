@@ -303,3 +303,61 @@ def test_discover_byte_returns_none_if_nothing_matches():
     transport = FakeTransport(replies)
     assert fw.discover_byte(transport, 0x2000) is None
     assert len(transport.sent) == 256  # tried every value 0-255
+
+
+def test_discover_window_single_unknown_finds_the_real_value():
+    """The fixed replacement for discover_byte() -- see docs/knowledge/hardware-findings.md's
+    'CRITICAL: cmd_DeviceVerify is unreliable below 8 bytes' finding. A real, aligned 8-byte
+    verify_flash call per combination, not a bare 1-byte guess."""
+    from fakes import FakeTransport
+
+    real_value = 0x42
+    replies = [
+        _minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_OK if v == real_value else fw.ACK_D_GENERAL_ERROR)
+        for v in range(real_value + 1)
+    ]
+    transport = FakeTransport(replies)
+    known = {0: 0xAA, 1: 0xBB, 2: 0xCC, 4: 0xDD, 5: 0xEE, 6: 0xFF, 7: 0x11}
+    result = fw.discover_window(transport, 0x2000, known, unknown_offsets=[3])
+    assert result == {0: 0xAA, 1: 0xBB, 2: 0xCC, 3: real_value, 4: 0xDD, 5: 0xEE, 6: 0xFF, 7: 0x11}
+    assert len(transport.sent) == real_value + 1
+    # every sent frame must carry the full 8-byte window, not a 1-byte payload
+    assert all(len(frame) > 8 for frame in transport.sent)  # header+payload+crc, always > payload alone
+
+
+def test_discover_window_two_unknowns_tries_combinations_in_product_order():
+    from fakes import FakeTransport
+
+    # itertools.product(range(256), repeat=2) yields (0,0),(0,1),...,(0,5) at index 5 first
+    real_a, real_b = 0, 5
+    match_index = real_a * 256 + real_b
+    replies = [
+        _minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2400, fw.ACK_OK if i == match_index else fw.ACK_D_GENERAL_ERROR)
+        for i in range(match_index + 1)
+    ]
+    transport = FakeTransport(replies)
+    known = {i: 0x00 for i in range(8) if i not in (2, 5)}
+    result = fw.discover_window(transport, 0x2400, known, unknown_offsets=[2, 5])
+    assert result[2] == real_a
+    assert result[5] == real_b
+    assert len(transport.sent) == match_index + 1
+
+
+def test_discover_window_returns_none_if_no_combination_matches():
+    from fakes import FakeTransport
+
+    replies = [_minimal_ack_reply(fw.CMD_DEVICE_VERIFY, 0x2000, fw.ACK_D_GENERAL_ERROR) for _ in range(256)]
+    transport = FakeTransport(replies)
+    known = {i: 0x00 for i in range(8) if i != 3}
+    assert fw.discover_window(transport, 0x2000, known, unknown_offsets=[3]) is None
+    assert len(transport.sent) == 256
+
+
+def test_discover_window_rejects_unaligned_address():
+    with pytest.raises(ValueError, match="aligned"):
+        fw.discover_window(None, 0x2001, {i: 0 for i in range(7)}, unknown_offsets=[7])
+
+
+def test_discover_window_rejects_incomplete_partition():
+    with pytest.raises(ValueError, match="partition"):
+        fw.discover_window(None, 0x2000, {0: 0, 1: 0}, unknown_offsets=[1, 2])  # offset 1 in both

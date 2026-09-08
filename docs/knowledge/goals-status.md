@@ -18,7 +18,8 @@ flowchart TD
     G1 --> G1e[✅ Write-back tested: full-block-copy repair confirmed working]
 
     G2 --> G2a[❌ Blocked: STM32 RDP protection, confirmed]
-    G2 --> G2b[⬜ Verify-oracle brute force: feasible, ~2-4 days/board, not yet attempted at scale]
+    G2 --> G2b[✅ 1-byte guess bug fixed: discover_window(), unit + live-tested]
+    G2 --> G2c[❌ Real mismatches cluster 2+ bytes; k=1 brute force found none in 2 real windows]
 
     G3 --> G3a[❌ Confirmed impossible without soldering]
 
@@ -28,6 +29,7 @@ flowchart TD
     G4 --> G4d[⬜ TLS trust question untested]
 
     style G2a fill:#f66,color:#000
+    style G2c fill:#f66,color:#000
     style G3a fill:#f66,color:#000
     style G4c fill:#fa0,color:#000
 ```
@@ -51,19 +53,32 @@ flowchart TD
   either an erase-then-full-rewrite sequence, or the same full-block-copy pattern with the target
   field edited in the source plaintext before re-encrypting.
 
-## 2. Firmware dumps — reopened, brute force measured feasible (2026-09-08)
+## 2. Firmware dumps — reopened, bug fixed, but real data looks mostly unrecoverable this way (2026-09-08)
 
 - Direct `cmd_DeviceRead` remains confirmed blocked by STM32 Read-Out Protection (RDP), a real
   hardware protection, not a code gap. See
   [Hardware Findings](hardware-findings.md#firmware-dump-blocker-rdp) for the address-map evidence.
 - The Verify-oracle side channel (`cmd_DeviceVerify`, no write/erase risk) is confirmed live even
-  inside RDP-protected flash (2026-09-06) and, as of 2026-09-08, its byte-by-byte brute-force path
-  (`dump-firmware --discover-unresolved`) has a real measured cost: **0.060s per guess**, so
-  **~2-4 days of continuous round-trips** for a ~21,500-byte unresolved gap (the actual size found
-  on the damaged Reaper against the closest available candidate). Not yet attempted at that scale —
-  the CLI has no checkpoint/resume support yet, a real risk for an unattended multi-day run. Full
-  account: [Hardware
-  Findings](hardware-findings.md#goal-2-brute-force-feasibility--discover-unresolved-real-numbers-2026-09-08).
+  inside RDP-protected flash (2026-09-06). Its byte-by-byte brute-force path
+  (`dump-firmware --discover-unresolved`) gained checkpoint/resume support and a `SIGTERM` fix
+  (2026-09-08, both confirmed working on real hardware) — but the same testing pass found
+  `cmd_DeviceVerify` calls shorter than 8 bytes, or not 8-byte-aligned, can report a mismatch **even
+  for the objectively correct byte**, specifically near real content divergences (exactly where
+  brute-forcing is needed). The earlier "~2-4 days, feasible" estimate was retracted — it assumed a
+  correct guess would be recognized, which is now known false.
+- **Fixed, same day**: `fw.discover_window()` guesses within a real, reliable 8-byte-aligned window
+  instead of a bare byte (`--max-combo` caps how many simultaneously-unknown bytes per window are
+  attempted, since cost is `256^k`). Unit-tested, then **validated against real hardware**: bisected
+  2 real 32-byte unresolved chunks down to their actual mismatching 8-byte window, tested all 16
+  single-position (k=1) hypotheses (8 per window) — **all 16 came back with no match**. Confirms
+  `discover_window()` itself works correctly (clean negatives, no false positives, no stuck FC), but
+  suggests real cross-firmware-version differences cluster in multi-byte groups rather than isolated
+  bytes — the opposite of what byte-by-byte brute-forcing assumes, so a real gap may stay mostly
+  unrecoverable via this oracle without a much closer candidate file. Also found the "18
+  undiscoverable bytes" claim itself needed two corrections (one region had zero candidate data at
+  all — a gap, not a mismatch; the other's "unresolved" status was itself a false positive from the
+  same bug, and actually matches). Full account: [Hardware
+  Findings](hardware-findings.md#critical-cmd_deviceverify-is-unreliable-below-8-bytes--when-misaligned-2026-09-08).
 - No path forward for *direct* reads without physical SWD hardware, which is out of scope for this
   project. One unproven, unconfirmed non-destructive lead exists for the STM32F0 family — see
   [Hardware Findings](hardware-findings.md#firmware-dump-blocker-rdp).

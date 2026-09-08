@@ -405,3 +405,50 @@ def test_print_defaults_comparison_flags_only_the_real_diff(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Eep_Pgm_Direction: real=1 default=2 (CHANGED)" in out
     assert "Eep_Pgm_Rampup_Pwr: real=50 default=50 (same)" in out
+
+
+def test_load_checkpoint_missing_file_returns_empty(tmp_path):
+    discovered, undiscoverable = cli._load_checkpoint(tmp_path / "does-not-exist.txt")
+    assert discovered == {}
+    assert undiscoverable == set()
+
+
+def test_append_then_load_checkpoint_round_trips(tmp_path):
+    path = tmp_path / "checkpoint.txt"
+    cli._append_checkpoint(path, 0x2401, 0xAB)
+    cli._append_checkpoint(path, 0x2402, None)
+    cli._append_checkpoint(path, 0x2403, 0x00)
+
+    discovered, undiscoverable = cli._load_checkpoint(path)
+    assert discovered == {0x2401: 0xAB, 0x2403: 0x00}
+    assert undiscoverable == {0x2402}
+
+
+def test_load_checkpoint_skips_malformed_lines(tmp_path, capsys):
+    path = tmp_path / "checkpoint.txt"
+    path.write_text("0x2401 0xAB\nnot a valid line\n0x2402 UNDISCOVERABLE\n\nbad_addr 0x01\n0x2403 bad_value\n")
+
+    discovered, undiscoverable = cli._load_checkpoint(path)
+    assert discovered == {0x2401: 0xAB}
+    assert undiscoverable == {0x2402}
+    err = capsys.readouterr().err
+    assert "malformed" in err
+    assert "bad address" in err
+    assert "bad value" in err
+
+
+def test_append_checkpoint_is_resumable_across_multiple_loads(tmp_path):
+    """Simulates an interrupted run: append a few bytes (as if discovered before a kill), reload
+    as a fresh process would on resume, append more, reload again — every prior entry survives."""
+    path = tmp_path / "checkpoint.txt"
+    cli._append_checkpoint(path, 0x2400, 0x01)
+    cli._append_checkpoint(path, 0x2401, 0x02)
+
+    discovered, _ = cli._load_checkpoint(path)
+    assert discovered == {0x2400: 0x01, 0x2401: 0x02}
+
+    # "resume": append more, as the next invocation would after loading the above
+    cli._append_checkpoint(path, 0x2402, 0x03)
+
+    discovered, _ = cli._load_checkpoint(path)
+    assert discovered == {0x2400: 0x01, 0x2401: 0x02, 0x2402: 0x03}

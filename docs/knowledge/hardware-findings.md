@@ -322,14 +322,147 @@ unplug and replug the FC's USB cable** (the ESC's own separate DC power did not 
 touched) — after that, `enter_4way_if()`/`connect_esc()` succeeded immediately and the real
 0.060s/call figure above was measured cleanly.
 
-**Practical implication for any real multi-day brute-force run**: the current CLI has no
-checkpoint/resume support (`--discover-unresolved` holds all progress in memory until the final
-write) and no signal handling to cleanly exit the 4-way-if session on interruption. A crash,
-`Ctrl-C`, connection drop, or anything else that kills the process mid-run would both lose all
-progress AND require a physical USB replug to recover the FC before any further work — a real
-practical risk for an unattended multi-day job as currently implemented. Not yet attempted at full
-scale; a checkpointing/resumable design would need to exist first for this to be a reasonable
-unattended undertaking.
+**Practical implication for any real multi-day brute-force run (superseded below)**: the CLI had no
+checkpoint/resume support and no signal handling to cleanly exit the 4-way-if session on
+interruption. Both were implemented and confirmed working the same day — see "Checkpoint/resume
+implemented and confirmed working" below. **But the same testing pass also found a far more
+important problem: the brute-force technique itself is unsound as designed — see "CRITICAL:
+`cmd_DeviceVerify` is unreliable below 8 bytes / when misaligned" immediately below, which
+supersedes the "~2-4 days, feasible" framing above.**
+
+## CRITICAL: `cmd_DeviceVerify` is unreliable below 8 bytes / when misaligned (2026-09-08)
+
+While testing the newly-added `--checkpoint` resume support (see below) against the damaged
+Reaper, every single byte brute-forced came back `UNDISCOVERABLE` — 18 for 18, across two widely
+separated regions (`0x74d8`-`0x74e7`, `0x2410`-`0x2411`). That's far too systematic to be 18
+independent hardware anomalies. Investigated directly instead of accepting it:
+
+- `fw.verify_flash(transport, 0x240f, bytes([0x19]))` returned **`False`** even though `0x19` is
+  the confirmed-correct byte at that address (part of a 16-byte chunk that verifies `True` as a
+  whole). Reproduced 3 times in a row, same session — not a one-off glitch.
+- Systematically swept every offset in a known-good 16-byte window (`0x2408`-`0x2417`, candidate
+  bytes confirmed correct via a whole-chunk verify): **only offset 0 (`0x2408`, the 8-byte-aligned
+  start) succeeded with a 1-byte verify. Every other offset (`0x2409`-`0x2417`) failed, using the
+  objectively correct byte value.**
+- Ruled out state/ordering: verifying `0x2409` as the literal first call of a brand-new session
+  (no preceding call at all) still returned `False`.
+- By contrast, an *aligned, ≥8-byte* verify call using real content always works correctly —
+  already proven by the original scan's successful whole-page/32-byte/8-byte matches, and
+  reconfirmed directly here (`0x2400+8` and `0x2408+8`, both `True` with real content).
+- Separately (same session): `fw.read_flash()` at the unprotected info-page address (`0x7c00`)
+  also failed outright at length 1, 2, and 4 (`ACK_D_GENERAL_ERROR`), succeeding only at length 8+.
+  So both `cmd_DeviceRead` and `cmd_DeviceVerify` share a minimum-length-8 requirement — but Verify
+  additionally showed the alignment-dependent single-byte failure above, which Read wasn't tested
+  for (Read is blocked entirely below `0x7c00` regardless of length, so this couldn't be isolated
+  the same way in the protected region).
+
+**Root cause not identified** — this needs more hardware time than a feasibility check justifies.
+Plausible directions, none confirmed: an internal comparison window narrower than requested that
+isn't being filled the way this project's code assumes; a bootloader-side bug specific to
+sub-8-byte or misaligned Verify requests; something specific to being near a real content
+divergence (the one region tested where 1-byte-aligned-at-offset-0 *did* work, `0x2000`-`0x2010`,
+has no real mismatch nearby at all).
+
+**Direct consequence: `discover_byte()`'s design (1-byte guesses) is unsound wherever it's actually
+needed** — every genuinely-unresolved address is, by definition, inside a region with a real
+mismatch, exactly the condition under which 1-byte verify was shown to fail even for the correct
+answer. **The "18 undiscoverable bytes" found this session are very likely a tool bug, not 18 real
+hardware anomalies** — do not treat them as confirmed unrecoverable. The `~2-4 days, feasible`
+brute-force estimate above assumed `discover_byte()` would actually find a match when the guess is
+right; that assumption is now known false for any address abutting a real divergence.
+
+**What still works, and what a fix would need**: full-length (≥8 bytes), 8-byte-aligned verify
+calls are confirmed reliable with real content. A corrected brute-force would need to guess in
+8-byte-aligned windows, holding already-known bytes fixed and sweeping only the genuinely unknown
+position(s). This is cheap (256 guesses, same cost as today) when exactly one byte in an aligned
+window is unknown — but this project's own data already contains long runs of *multiple*
+consecutive unknown bytes in the same aligned window (the 16-byte run at `0x74d8`-`0x74e7` spans
+two fully-unknown 8-byte windows). Brute-forcing a window with `k` simultaneously-unknown bytes
+costs `256^k` guesses — trivial at `k=1`, already impractical at `k=2` (65,536), and utterly
+infeasible at `k=8` (`256^8` ≈ 1.8×10^19).
+
+**Two corrections to the "18 undiscoverable bytes" claim above, found while double-checking it
+properly:**
+
+- **`0x74d8`-`0x74e7` never had a real byte to guess against in the first place**: the 32.9.5
+  candidate file has **no data at all** for any address `0x74d8` and above (confirmed:
+  `hexfile.parse_intel_hex(...)` has no key past `0x74d0`-ish; max candidate address is `0x7cff`
+  but with real gaps before it). `_verify_region`'s own docstring already distinguishes this case
+  ("a gap", zero-cost, no hardware call) from a genuine content mismatch — this region was always a
+  gap, not 16 verified hardware anomalies. Brute-forcing it blind (no candidate-informed starting
+  point at all) was never a meaningful test of the Verify oracle's reliability; the `0x240f`/
+  `0x2408`-`0x2417` findings above (which DO have real candidate data) are the ones that actually
+  demonstrate the bug.
+- **`0x2410`-`0x2411`'s "unresolved" status was itself a false positive from this same bug, not a
+  real mismatch.** It came from an earlier ad-hoc test using a bare 2-byte `--start 0x2410 --end
+  0x2412` range — itself shorter than the reliable 8-byte minimum. Re-tested properly with a real
+  aligned 8-byte verify (`fw.verify_flash(transport, 0x2410, <candidate's real 8 bytes>)`):
+  **returned `True` — the whole window matches the candidate exactly.** This means `_verify_region`
+  (used by every `dump-firmware` invocation, not just `--discover-unresolved`) can itself issue an
+  unreliable sub-8-byte verify call whenever a caller's `--start`/`--end` range (or a remaining gap
+  between them) is narrower than 8 bytes — a latent correctness gap in the tool generally, not just
+  the brute-force feature. **Not yet fixed** — `_verify_region` has no guard against this today.
+  Anyone re-running `dump-firmware` with a small custom `--start`/`--end` window should treat a
+  reported mismatch there as unconfirmed until re-checked with a real ≥8-byte-aligned request.
+
+**Fixed the same day**: `fw.discover_window()` replaces `discover_byte()`'s design — guesses within
+a real, reliable 8-byte-aligned window instead of a bare byte, taking `known` values for already-
+resolved offsets and a list of `unknown_offsets` to sweep combinatorially (`itertools.product`,
+`256^len(unknown_offsets)` calls). `dump-firmware --discover-unresolved` now groups unresolved
+bytes into their containing 8-byte windows and calls this instead; a new `--max-combo` flag (default
+1) skips any window needing more simultaneous guesses than that, so a `k=8` window like the (now
+understood to be a gap, not urgent) `0x74d8` region is correctly skipped rather than falsely
+reported `UNDISCOVERABLE`. Unit-tested (`tests/test_fourwayif.py`) against a fake transport for the
+k=1 and k=2 cases, the no-match case, and both input-validation errors.
+
+**Validated against real hardware the same day, with a sobering result.** Bisected two of the
+Reaper's real 32-byte "unresolved" chunks (`0x2400+32`, `0x2420+32`) down to the actual
+mismatching 8-byte sub-window using real ≥8-byte-aligned verify calls (reliable, per the fix
+above): `0x2400+32`'s real divergence lives entirely in `0x2418`-`0x241f` (the other 24 bytes of
+that chunk, including `0x2410`-`0x2417`, fully match the candidate); `0x2420+32`'s lives entirely
+in `0x2430`-`0x2437`. For each of these 2 real mismatching windows, tested all 8
+"exactly this one position differs, the other 7 match candidate" hypotheses via
+`discover_window()` with k=1 (256 guesses each, real 8-byte-aligned calls) — **all 16 hypotheses
+(8 per window, 2 windows) came back with no match.** Every window with a confirmed real mismatch
+tested so far has 2+ simultaneously-different bytes, not one isolated byte.
+
+**This validates `discover_window()`'s correctness** (clean, consistent `None` results across 16
+real exhaustive single-position searches — no false positives, no crashes, `exit_interface()` ran
+cleanly every time) but **reveals a new, more fundamental feasibility problem than the byte-length
+bug**: real content differences between two firmware *versions* likely cluster in multi-byte groups
+(a changed instruction, an updated constant, a shifted reference) rather than isolated single
+bytes — the opposite of what byte-by-byte brute-forcing assumes. With `--max-combo` capped at a
+practical value (1 or 2), a real cross-version gap may turn out to be mostly unrecoverable via this
+oracle regardless of the length/alignment fix, unless a much closer candidate is available (as with
+Furling32's 98.8% match when an exact-version file existed) so there's little gap left to
+brute-force in the first place. Not yet tried: `--max-combo 2` against either of these 2 confirmed
+windows (65,536 guesses, ~1 hour each at the measured rate) — would confirm whether they're
+genuinely 2-byte differences or something larger.
+
+**Also confirmed (2026-09-08, unrelated to the above): a full power cycle (both FC USB and ESC's
+separate DC power) recovers a wedged FC state that a USB-only replug did not.** Symptom was
+different from the earlier stuck-passthrough case too: consistently a 3-byte reply instead of the
+expected 5-byte MSP header (reproduced 3x), and the FC had already silently re-enumerated to a
+different `/dev/ttyACM` number on its own before this was even noticed — suggesting a genuine
+firmware-level wedge, not just a leftover passthrough flag. A full power cycle fixed it
+immediately.
+
+## Checkpoint/resume implemented and confirmed working (2026-09-08)
+
+`dump-firmware --discover-unresolved` gained a `--checkpoint FILE` option: appends one line per
+resolved byte (`<addr> <value>` or `<addr> UNDISCOVERABLE`), fsync'd immediately, and loads
+existing entries on startup to skip already-known addresses. `SIGTERM` is now caught and converted
+to the same `KeyboardInterrupt` `Ctrl-C` already raised, so the existing `finally` block (which
+calls `exit_interface()`) runs on either — directly fixing the stuck-FC-passthrough gap found
+earlier this session.
+
+**Confirmed working end-to-end on real hardware**: started a small brute-force run, let it discover
+one byte, sent `SIGTERM` mid-run — the process printed a clean "Interrupted" message, exited 0x0f
+gracefully from `exit_interface()` (a normal warning, not a crash), and the checkpoint file had the
+one completed byte. Resumed with the same `--checkpoint` path: **no physical USB replug was
+needed** (confirming the SIGTERM fix works), the already-checkpointed byte was skipped with no
+round-trip, and the run continued correctly. This part of the fix is solid, independent of the
+Verify-reliability problem found in the same testing pass above.
 
 ## `write_flash()` without erase-first corrupts far more than the targeted bytes (2026-09-07)
 
