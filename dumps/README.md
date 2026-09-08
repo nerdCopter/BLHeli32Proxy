@@ -40,3 +40,17 @@ directs explicitly each time — not something this project's own tooling ever d
 (the "never write into `$BLHELI32PROXY_ARCHIVE_DIR`" rule above still describes this project's own
 automated behavior; a human deliberately organizing their own archive is a different action from
 the tool silently writing there).
+
+## Known mislabeled captures (2026-09-08 correction)
+
+`esc2-setup-20260907-160717.bin` and `esc3-setup-20260907-160717.bin` were committed in
+`38f6720` as if they were final-state Furling32 evidence (that commit's session was
+testing on a Furling32, GD32F350x6, firmware 32.9.5). **They are not.** Verified via
+`extract_identity_strings()`: both decode to `layout=Aikon_AK32_4IN1_35A_6S_V1_0`,
+`cpu=STM32F051x6` — stale AK32 captures from earlier the same day, swept into that commit
+by mistake. Left in place, not deleted or replaced — real capture data, just mislabeled by
+which session it was attributed to, not by filename accuracy (the timestamp in each name is
+correct; the *assumed hardware source* was wrong). No doc in this project cites these two
+files by name, so no other correction was needed. Genuine raw-byte Furling32 evidence for
+this offset map exists separately: `esc1-setup-20260907-170726.bin` (same repo, confirmed
+`layout=Furling32`, `cpu=GD32F350x6`).

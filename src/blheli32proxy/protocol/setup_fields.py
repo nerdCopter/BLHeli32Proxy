@@ -70,28 +70,63 @@ firmware) -- both read `255` (sentinel) there, same pattern as
 capability flag, same category as the `Eep_Hw_*` flags) remains unlocated
 -- no user-facing control exists for it, so this method can't reach it.
 
+**2 more fields (2026-09-08, third real board/MCU vendor -- a damaged FOXEER Reaper,
+AT32F421/Artery Technology)**: `Eep_Pgm_Pwm_Frequency_Lo` added as a second name for the
+already-confirmed offset 5 (same byte as `Eep_Pgm_Pwm_Freq` -- both are real BLHeli_32 names for
+it depending on firmware version; the AK32-specific `Eep_Pgm_Pwm_Freq` entry is untouched, this is
+purely additive). `Eep_Pgm_Pwm_Frequency_Hi` (offset 34, literal kHz value, same encoding as
+`_Lo`) is a genuinely new offset, confirmed via a real differential test (128 -> 48, matching a UI
+change from 128 kHz to 48 kHz exactly, single clean byte diff). All 22 fields from the AK32/
+Furling32 work also confirmed correct on this third MCU vendor -- see
+docs/knowledge/hardware-findings.md's "damaged unit" section for the full account.
+
+**12 more fields (2026-09-08, same session)**: a THIRD confirmation method beyond differential
+capture and direct real-.ixi value matching -- cross-board value correlation. With 3 independent
+real boards' raw plaintext AND their real .ixi values on hand (AK32, Furling32, this damaged
+Reaper), searched every offset 0-191 for a byte pattern matching each remaining field's known
+per-board .ixi value simultaneously across all 3 boards. `Eep_FW_Sub_Revision` (offset 1),
+`Eep_Layout_Revision` (2), `Eep_Hw_LED_Capable_0/1/2` (50/51/52), and `Eep_Hw_Pwm_Freq_Min/Max`
+(54/55) each had exactly ONE matching offset across all 192 positions -- unambiguous. 6 more
+(`Eep_FW_Main_Revision` offset 0, `Eep_Hw_Voltage_Sense_Capable` 48, `Eep_Hw_Current_Sense_Capable`
+49, `Eep_Hw_LED_Capable_3` 53, `Eep_SPORT_Capable` 62, `Eep_Nondamped_Capable` 63) had multiple raw
+candidates individually, resolved by eliminating any offset already assigned to a different
+confirmed field, which in every case left exactly one remaining candidate -- and every resolved
+offset lands in a clean, unbroken sequential run matching the real `.ixi`'s own declared field
+order exactly (`FW_Main_Revision, FW_Sub_Revision, Layout_Revision` at 0-2; `Hw_Voltage_Sense_Capable`
+through `Hw_Pwm_Freq_Max` at 48-55; `SPORT_Capable, Nondamped_Capable` at 62-63), strong structural
+corroboration beyond the value match alone. **`Eep_ESC_Mode` (value `2` on all 3 boards) could NOT
+be located** -- the literal byte value `2` does not appear ANYWHERE in the Reaper's 192-byte
+plaintext, at all, which suggests this field may not be a directly-stored byte in this structure at
+all (possibly derived from firmware/layout metadata the app already has, not read from the ESC).
+Left unconfirmed rather than guessed.
+
 BLHeli_S's public source (bitdump/BLHeli, BLHeli_S.asm) confirms some field
 *names* but NOT these offsets or widths — BLHeli_32 (closed-source) widened
 several fields (e.g. throttle values: 1 scaled byte in BLHeli_S vs. 2 raw
 bytes here) and reordered others. No public source exists for BLHeli_32-only
 fields — remaining undecoded: `Eep_Note_Array` (melody note sequence, byte
-layout not attempted), all `Eep_Hw_*` capability flags (expected
-read-only/immutable, not user-settable so not reachable via this method),
-`Eep_Name`, `Eep_ESC_Layout`, `Eep_ESC_Mode`, `Eep_FW_*_Revision`,
-`Eep_Layout_Revision` (identity/version fields, also immutable). Do not
-guess offsets for these; leave them undecoded rather than emit a wrong
-value. In particular, never use this module's output to drive a
-write-back/restore path — it is read-only reporting, not a validated
-round-trip format.
+layout not attempted), `Eep_ESC_Layout` (recoverable via
+`extract_identity_strings()`'s delimiter search, not a fixed offset — not
+the same as a confirmed numeric offset), and `Eep_ESC_Mode` (see above — not
+even confirmed to be a literal stored byte). Do not guess offsets for these;
+leave them undecoded rather than emit a wrong value. In particular, never
+use this module's output to drive a write-back/restore path — it is
+read-only reporting, not a validated round-trip format.
 """
 
 from __future__ import annotations
 
 # name -> (offset, width_bytes); width 1 = plain byte, 2 = little-endian uint16
 CONFIRMED_FIELDS: dict[str, tuple[int, int]] = {
+    # confirmed 2026-09-08 via 3-way cross-board value correlation (AK32/Furling32/Reaper), not a
+    # differential test -- see module docstring's "12 more fields" note for method and confidence
+    "Eep_FW_Main_Revision": (0, 1),
+    "Eep_FW_Sub_Revision": (1, 1),
+    "Eep_Layout_Revision": (2, 1),
     "Eep_Pgm_Direction": (3, 1),
     "Eep_Pgm_Rampup_Pwr": (4, 1),
-    "Eep_Pgm_Pwm_Freq": (5, 1),
+    "Eep_Pgm_Pwm_Freq": (5, 1),  # AK32/32.7 name; same byte as Eep_Pgm_Pwm_Frequency_Lo below on 32.9+
+    "Eep_Pgm_Pwm_Frequency_Lo": (5, 1),  # 32.9+ name for the same offset -- added, not a replacement
     "Eep_Pgm_Comm_Timing": (6, 1),
     "Eep_Pgm_Demag_Comp": (7, 1),
     "Eep_Pgm_Ppm_Min_Throttle": (8, 2),
@@ -116,6 +151,18 @@ CONFIRMED_FIELDS: dict[str, tuple[int, int]] = {
     "Eep_Pgm_Stall_Prot": (31, 1),
     "Eep_Pgm_SBUS_Channel": (32, 1),
     "Eep_Pgm_SPORT_Physical_ID": (33, 1),
+    "Eep_Pgm_Pwm_Frequency_Hi": (34, 1),
+    # confirmed 2026-09-08, same cross-board correlation method as the block at the top of this dict
+    "Eep_Hw_Voltage_Sense_Capable": (48, 1),
+    "Eep_Hw_Current_Sense_Capable": (49, 1),
+    "Eep_Hw_LED_Capable_0": (50, 1),
+    "Eep_Hw_LED_Capable_1": (51, 1),
+    "Eep_Hw_LED_Capable_2": (52, 1),
+    "Eep_Hw_LED_Capable_3": (53, 1),
+    "Eep_Hw_Pwm_Freq_Min": (54, 1),
+    "Eep_Hw_Pwm_Freq_Max": (55, 1),
+    "Eep_SPORT_Capable": (62, 1),
+    "Eep_Nondamped_Capable": (63, 1),
 }
 
 
@@ -178,10 +225,10 @@ def extract_identity_strings(plaintext: bytes) -> tuple[str | None, str | None]:
 
 IXI_PARTIAL_BACKUP_WARNING = (
     "; Partial backup written by blheli32proxy — confirmed fields only (see\n"
-    "; protocol/setup_fields.py). NOT a complete .ixi: missing header fields\n"
-    "; (Eep_ESC_Layout, Eep_FW_*_Revision, etc.) and ~18 undecoded Eep_Note_Array/\n"
-    "; Eep_Hw_* fields. Do not load this into BLHeliSuite32xl or any other\n"
-    "; tool expecting a real .ixi — it will misinterpret the missing fields.\n"
+    "; protocol/setup_fields.py). NOT a complete .ixi: missing Eep_ESC_Layout,\n"
+    "; Eep_ESC_Mode, and Eep_Note_Array. Do not load this into BLHeliSuite32xl\n"
+    "; or any other tool expecting a real .ixi — it will misinterpret the\n"
+    "; missing fields.\n"
 )
 
 

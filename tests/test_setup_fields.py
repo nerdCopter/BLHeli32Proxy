@@ -36,9 +36,13 @@ REAL_PLAINTEXT_ESC1 = bytes.fromhex(
 
 # real values from the .ixi backup's [ESC1] section (matches REAL_PLAINTEXT_ESC0)
 EXPECTED_ESC0 = {
+    "Eep_FW_Main_Revision": 32,
+    "Eep_FW_Sub_Revision": 70,
+    "Eep_Layout_Revision": 44,
     "Eep_Pgm_Direction": 1,
     "Eep_Pgm_Rampup_Pwr": 50,
     "Eep_Pgm_Pwm_Freq": 48,
+    "Eep_Pgm_Pwm_Frequency_Lo": 48,
     "Eep_Pgm_Comm_Timing": 0,
     "Eep_Pgm_Demag_Comp": 2,
     "Eep_Pgm_Ppm_Min_Throttle": 1014,
@@ -63,6 +67,17 @@ EXPECTED_ESC0 = {
     "Eep_Pgm_Stall_Prot": 1,
     "Eep_Pgm_SBUS_Channel": 255,
     "Eep_Pgm_SPORT_Physical_ID": 255,
+    "Eep_Pgm_Pwm_Frequency_Hi": 255,
+    "Eep_Hw_Voltage_Sense_Capable": 0,
+    "Eep_Hw_Current_Sense_Capable": 255,
+    "Eep_Hw_LED_Capable_0": 0,
+    "Eep_Hw_LED_Capable_1": 0,
+    "Eep_Hw_LED_Capable_2": 0,
+    "Eep_Hw_LED_Capable_3": 0,
+    "Eep_Hw_Pwm_Freq_Min": 255,
+    "Eep_Hw_Pwm_Freq_Max": 255,
+    "Eep_SPORT_Capable": 255,
+    "Eep_Nondamped_Capable": 1,
 }
 
 
@@ -97,11 +112,19 @@ def test_all_confirmed_offsets_fit_within_192_byte_plaintext():
 # entirely -- this project's tool decodes every confirmed offset regardless of what a specific
 # board's own .ixi export chooses to show. Same story for Eep_Pgm_SBUS_Channel/SPORT_Physical_ID
 # (255, 255 on AK32 -- no SBUS/S.PORT support on that firmware at all) and Eep_Pgm_LED_Control (0
-# on AK32, which does have LEDs but none configured/lit).
+# on AK32, which does have LEDs but none configured/lit). Eep_Pgm_Pwm_Frequency_Lo is the reverse
+# case: AK32's own real .ixi only ever shows this same offset as "Eep_Pgm_Pwm_Freq" (no _Lo/_Hi
+# split on 32.7 firmware) -- this project's tool emits both names for the one byte, confirmed
+# identical (48) on real AK32 hardware, since both names are real BLHeli_32 names for it depending
+# on firmware version (see docs/knowledge/setup-block-fields.md's cross-version section).
 REAL_IXI_ESC1_SECTION = """[ESC1]
+Eep_FW_Main_Revision=32
+Eep_FW_Sub_Revision=70
+Eep_Layout_Revision=44
 Eep_Pgm_Direction=1
 Eep_Pgm_Rampup_Pwr=50
 Eep_Pgm_Pwm_Freq=48
+Eep_Pgm_Pwm_Frequency_Lo=48
 Eep_Pgm_Comm_Timing=0
 Eep_Pgm_Demag_Comp=2
 Eep_Pgm_Ppm_Min_Throttle=1014
@@ -126,6 +149,17 @@ Eep_Pgm_Auto_Tlm_Mode=0
 Eep_Pgm_Stall_Prot=1
 Eep_Pgm_SBUS_Channel=255
 Eep_Pgm_SPORT_Physical_ID=255
+Eep_Pgm_Pwm_Frequency_Hi=255
+Eep_Hw_Voltage_Sense_Capable=0
+Eep_Hw_Current_Sense_Capable=255
+Eep_Hw_LED_Capable_0=0
+Eep_Hw_LED_Capable_1=0
+Eep_Hw_LED_Capable_2=0
+Eep_Hw_LED_Capable_3=0
+Eep_Hw_Pwm_Freq_Min=255
+Eep_Hw_Pwm_Freq_Max=255
+Eep_SPORT_Capable=255
+Eep_Nondamped_Capable=1
 """
 
 
@@ -141,8 +175,9 @@ def test_format_ixi_section_esc_numbering_is_one_based():
 
 def test_format_ixi_section_never_fabricates_unconfirmed_fields():
     section = sf.format_ixi_section(0, EXPECTED_ESC0)
-    # only CONFIRMED_FIELDS lines — none of the real .ixi's unconfirmed fields
-    for unconfirmed in ("Eep_ESC_Layout", "Eep_FW_Main_Revision", "Eep_Hw_Voltage_Sense_Capable"):
+    # only CONFIRMED_FIELDS lines — none of the real .ixi's still-unconfirmed fields
+    # (as of 2026-09-08: only these 3 remain unconfirmed, see setup_fields.py's module docstring)
+    for unconfirmed in ("Eep_ESC_Layout", "Eep_ESC_Mode", "Eep_Note_Array"):
         assert unconfirmed not in section
 
 
