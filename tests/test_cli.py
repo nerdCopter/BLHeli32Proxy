@@ -343,7 +343,9 @@ def test_dump_firmware_defaults_derive_from_a_non_stm32f0_shaped_candidate(tmp_p
 def test_verify_region_recovers_partial_candidate_coverage():
     """A candidate covering only part of a nominal chunk must still confirm
     the part it DOES cover, rather than the whole chunk being thrown away as
-    unconfirmed."""
+    unconfirmed. Uses realistic >=8-byte sizes throughout -- cmd_DeviceVerify is
+    confirmed unreliable below 8 bytes (2026-09-08), so the covered part must be
+    exactly 8 bytes to actually get verified rather than deferred."""
     from fakes import FakeTransport
     from blheli32proxy.protocol import fourwayif as fw
 
@@ -353,17 +355,66 @@ def test_verify_region_recovers_partial_candidate_coverage():
         crc = fw._crc_xmodem(body)
         return body + bytes([(crc >> 8) & 0xFF, crc & 0xFF])
 
-    # candidate covers only 0x2000-0x2001 (2 bytes); 0x2002-0x2003 missing entirely
-    candidate = {0x2000: 0x11, 0x2001: 0x22}
+    # candidate covers exactly 0x2000-0x2007 (8 bytes); 0x2008-0x200f missing entirely
+    candidate = {addr: addr & 0xFF for addr in range(0x2000, 0x2008)}
     transport = FakeTransport([ack_reply(0x2000, fw.ACK_OK)])  # exactly one verify call expected
 
     confirmed: dict[int, int] = {}
     unresolved: list[tuple[int, int]] = []
-    cli._verify_region(transport, [candidate], 0x2000, 4, confirmed, unresolved)
+    cli._verify_region(transport, [candidate], 0x2000, 16, confirmed, unresolved)
 
-    assert confirmed == {0x2000: 0x11, 0x2001: 0x22}
-    assert set(unresolved) == {(0x2002, 1), (0x2003, 1)}
+    assert confirmed == candidate
+    assert set(unresolved) == {(addr, 1) for addr in range(0x2008, 0x2010)}
     assert len(transport.sent) == 1  # the no-data half never touched the transport at all
+
+
+def test_verify_region_defers_candidate_covered_range_under_8_bytes():
+    """cmd_DeviceVerify is confirmed unreliable below 8 bytes (2026-09-08) -- a
+    candidate-covered range narrower than 8 bytes must be deferred as unresolved,
+    never tested via an unreliable short verify_flash call. Regression test: an
+    earlier version of this code issued a real 2-byte verify here and got a false
+    'mismatch' for content that actually matched (see docs/knowledge/hardware-
+    findings.md's 'CRITICAL: cmd_DeviceVerify is unreliable below 8 bytes')."""
+    from fakes import FakeTransport
+
+    candidate = {0x2410: 0x30, 0x2411: 0x9B}  # real content, both bytes genuinely correct
+    transport = FakeTransport([])  # must never be touched
+
+    confirmed: dict[int, int] = {}
+    unresolved: list[tuple[int, int]] = []
+    cli._verify_region(transport, [candidate], 0x2410, 2, confirmed, unresolved)
+
+    assert confirmed == {}
+    assert unresolved == [(0x2410, 2)]
+    assert transport.sent == []  # deferred, not guessed at with an unreliable short call
+
+
+def test_verify_region_floors_min_mismatch_length_to_8():
+    """A caller-supplied min_mismatch_length below 8 must not create a sub-8-byte
+    verify_flash call -- cmd_DeviceVerify is confirmed unreliable there (2026-09-08)."""
+    from fakes import FakeTransport
+    from blheli32proxy.protocol import fourwayif as fw
+
+    def mismatch_reply(addr):
+        addr_h, addr_l = (addr >> 8) & 0xFF, addr & 0xFF
+        body = bytes([fw.ESCAPE_DEVICE, fw.CMD_DEVICE_VERIFY, addr_h, addr_l, 0x01, 0x00, fw.ACK_D_GENERAL_ERROR])
+        crc = fw._crc_xmodem(body)
+        return body + bytes([(crc >> 8) & 0xFF, crc & 0xFF])
+
+    candidate = {addr: 0xAA for addr in range(0x2000, 0x2010)}  # 16 bytes, real content
+    # whole-16-byte attempt fails first, then bisects into two 8-byte attempts, both fail too
+    transport = FakeTransport([mismatch_reply(0x2000), mismatch_reply(0x2000), mismatch_reply(0x2008)])
+
+    confirmed: dict[int, int] = {}
+    unresolved: list[tuple[int, int]] = []
+    cli._verify_region(transport, [candidate], 0x2000, 16, confirmed, unresolved, min_mismatch_length=1)
+
+    # stopped at 8-byte granularity despite min_mismatch_length=1, never called verify_flash
+    # with a shorter length
+    assert set(unresolved) == {(0x2000, 8), (0x2008, 8)}
+    assert len(transport.sent) == 3
+    for frame in transport.sent[1:]:
+        assert len(frame) == 15  # 5-byte header + 8-byte payload + 2-byte crc (the two sub-calls)
 
 
 def test_dump_firmware_pages_are_256_byte_aligned():
@@ -408,9 +459,10 @@ def test_print_defaults_comparison_flags_only_the_real_diff(tmp_path, capsys):
 
 
 def test_load_checkpoint_missing_file_returns_empty(tmp_path):
-    discovered, undiscoverable = cli._load_checkpoint(tmp_path / "does-not-exist.txt")
+    discovered, undiscoverable, hypothesis_exhausted = cli._load_checkpoint(tmp_path / "does-not-exist.txt")
     assert discovered == {}
     assert undiscoverable == set()
+    assert hypothesis_exhausted == {}
 
 
 def test_append_then_load_checkpoint_round_trips(tmp_path):
@@ -418,23 +470,37 @@ def test_append_then_load_checkpoint_round_trips(tmp_path):
     cli._append_checkpoint(path, 0x2401, 0xAB)
     cli._append_checkpoint(path, 0x2402, None)
     cli._append_checkpoint(path, 0x2403, 0x00)
+    cli._append_checkpoint_window(path, 0x2440, 2)
 
-    discovered, undiscoverable = cli._load_checkpoint(path)
+    discovered, undiscoverable, hypothesis_exhausted = cli._load_checkpoint(path)
     assert discovered == {0x2401: 0xAB, 0x2403: 0x00}
     assert undiscoverable == {0x2402}
+    assert hypothesis_exhausted == {0x2440: 2}
 
 
 def test_load_checkpoint_skips_malformed_lines(tmp_path, capsys):
     path = tmp_path / "checkpoint.txt"
     path.write_text("0x2401 0xAB\nnot a valid line\n0x2402 UNDISCOVERABLE\n\nbad_addr 0x01\n0x2403 bad_value\n")
 
-    discovered, undiscoverable = cli._load_checkpoint(path)
+    discovered, undiscoverable, hypothesis_exhausted = cli._load_checkpoint(path)
     assert discovered == {0x2401: 0xAB}
     assert undiscoverable == {0x2402}
+    assert hypothesis_exhausted == {}
     err = capsys.readouterr().err
     assert "malformed" in err
     assert "bad address" in err
     assert "bad value" in err
+
+
+def test_load_checkpoint_keeps_max_hypothesis_exhausted_per_window(tmp_path):
+    """A window may be recorded exhausted at k=1 in one run, then k=2 in a later, higher
+    --max-combo run -- resuming must use the highest max_combo seen, not the last line read."""
+    path = tmp_path / "checkpoint.txt"
+    cli._append_checkpoint_window(path, 0x2440, 2)
+    cli._append_checkpoint_window(path, 0x2440, 1)
+
+    _, _, hypothesis_exhausted = cli._load_checkpoint(path)
+    assert hypothesis_exhausted == {0x2440: 2}
 
 
 def test_append_checkpoint_is_resumable_across_multiple_loads(tmp_path):
@@ -444,11 +510,23 @@ def test_append_checkpoint_is_resumable_across_multiple_loads(tmp_path):
     cli._append_checkpoint(path, 0x2400, 0x01)
     cli._append_checkpoint(path, 0x2401, 0x02)
 
-    discovered, _ = cli._load_checkpoint(path)
+    discovered, _, _ = cli._load_checkpoint(path)
     assert discovered == {0x2400: 0x01, 0x2401: 0x02}
 
     # "resume": append more, as the next invocation would after loading the above
     cli._append_checkpoint(path, 0x2402, 0x03)
 
-    discovered, _ = cli._load_checkpoint(path)
+    discovered, _, _ = cli._load_checkpoint(path)
     assert discovered == {0x2400: 0x01, 0x2401: 0x02, 0x2402: 0x03}
+
+
+def test_candidate_window_bytes_returns_first_full_match():
+    candidate_partial = {0x2400: 0x01}  # only 1 of 8 bytes -- doesn't cover the whole window
+    candidate_full = {addr: addr & 0xFF for addr in range(0x2400, 0x2408)}
+    result = cli._candidate_window_bytes([candidate_partial, candidate_full], 0x2400)
+    assert result == bytes(range(0x2400 & 0xFF, (0x2400 & 0xFF) + 8))
+
+
+def test_candidate_window_bytes_none_when_no_candidate_covers_it():
+    candidate_partial = {0x2400: 0x01, 0x2401: 0x02}
+    assert cli._candidate_window_bytes([candidate_partial], 0x2400) is None

@@ -176,7 +176,8 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
     multi-byte groups** (a changed instruction, an updated constant), the opposite of what
     byte-by-byte brute-forcing assumes — meaning a real gap may stay mostly unrecoverable via this
     oracle regardless of the length/alignment fix, unless a much closer candidate is available.
-    `--max-combo 2` (65,536 guesses, ~1hr/window) not yet tried against either confirmed window.
+    `--max-combo 2` not yet tried against either confirmed window at the time — see 2026-09-09
+    below for why the original "~65,536 guesses, ~1hr/window" cost estimate here was itself wrong.
   - **Two corrections found while double-checking the "18 undiscoverable" claim**: (1) the
     `0x74d8`+ region has **zero candidate data at all** (a gap, not a verified mismatch — this
     project's own `_verify_region` docstring already distinguishes the two, this just wasn't a
@@ -197,6 +198,34 @@ and `docs/USAGE.md` for day-to-day operation and OS-level redirection steps.
     mismatch) — `256^k` guesses for `k` unknowns is infeasible at `k≥2` already, so whether any
     real *mismatching* multi-byte window is recoverable via this oracle at all remains an open
     question.
+  - **2026-09-09: attempted a real multi-hour campaign, found and fixed 2 more real problems, ran
+    out of session time before finishing.** (1) `_verify_region`'s sub-8-byte guard (the follow-up
+    item above) is now fixed — floored `min_mismatch_length` to 8, and a new `--min-mismatch-length`
+    flag lets a full 8-byte-granularity re-scan happen on demand. (2) `--max-combo 2`'s real cost
+    was underestimated by ~30x: hypothesis mode tries all `C(8,k)` position-combinations for a given
+    `k`, so `k=2` is `C(8,2)=28` combinations × up to 65,536 guesses each — **up to 1.8M guesses
+    (~30 hours) to exhaust one window**, not "~65,536, ~1hr" as first estimated. Confirmed live: a
+    real run spent 100 minutes stuck on the first window with zero checkpoint progress, because the
+    time-budget check only fired once per `k`-level, not between the 28 combinations within `k=2`.
+    Fixed the same day (checks before every combination now). (3) A real 8-byte re-scan (with the
+    fix from (1)) narrowed the gap from 2,450 32-byte chunks to **4,282 precise 8-byte windows** —
+    the actual shape of the remaining gap is now known at the granularity that matters. (4) An
+    unrelated real crash: opening EmuFlight Configurator against the same FC mid-run raised an
+    uncaught `serial.SerialException` that killed the process outright — not yet caught by this
+    project's exception handling (only `KeyboardInterrupt` is). Full account: [Hardware
+    Findings](docs/knowledge/hardware-findings.md#real-brute-force-campaign-attempt-on-the-damaged-reaper-2026-09-09).
+  - **New resource, not yet evaluated**: [OpenOCD](https://openocd.org/) — the standard open-source
+    JTAG/SWD debugger — as the concrete tool for the already-known "physical soldering + a real
+    debug probe" path this backlog's AM32 item and Goal 2's RDP blocker both require. Doesn't change
+    that physical-access requirement; replaces the vaguer "some ST-Link clone" placeholder with a
+    real, evaluable tool.
+  - **Not yet started**: (1) a full `--max-combo 1` sweep of all 4,282 windows (cheap, ~15-25s
+    each, ~1-2 hours total, gives the real k=1 success rate across a much larger sample than the 2
+    windows tested so far); (2) `--max-combo 2` targeted at whichever windows remain after that,
+    now that its real cost is understood; (3) catching `serial.SerialException` (or a broader base)
+    in `_dump_firmware_body` so a mid-run port steal fails as cleanly as an interrupt does.
+    `dumps/reaper-campaign-260909-k1.checkpoint` carries the 2 confirmed results (`0x2418`, `0x2430`,
+    both k=1-exhausted) forward into the next session.
 
 - **AM32 flashing without soldering — closed, confirmed not possible.** BLHeli_32 sets the STM32's
   Read-Out Protection (RDP) fuse; converting to AM32 always requires physically soldering SWD

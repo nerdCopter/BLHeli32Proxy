@@ -613,6 +613,54 @@ for any chip on any model), not a fixed address. This is what makes the command 
 BLHeli32 model without per-model configuration. Past the candidates' own upper range (the info
 page), use `dump-info-page` instead, which already works there via direct reads.
 
+`--min-mismatch-length N` (default 32) controls how far a genuine content mismatch gets bisected
+before being reported — pass `8` for the finest reliable breakdown (more real round-trips; a pure
+gap with no candidate data at all always bisects to 1 byte regardless, since that path never
+touches hardware). Always floored to 8 internally — `cmd_DeviceVerify` is confirmed unreliable
+below 8 bytes or when misaligned, even for the objectively correct value (see [Hardware
+Findings](knowledge/hardware-findings.md#critical-cmd_deviceverify-is-unreliable-below-8-bytes--when-misaligned-2026-09-08)).
+
+### Recovering unresolved bytes via brute force (`--discover-unresolved`)
+
+Once a candidate comparison leaves some bytes unresolved (real content differs from every
+candidate given), `--discover-unresolved` can try to recover them via `cmd_DeviceVerify` used as a
+byte-guessing oracle — no candidate needed, but real hardware round-trips (measured ~0.06s each).
+It works in real, reliable 8-byte-aligned windows, never a bare single byte:
+
+```bash
+blheli32proxy dump-firmware --port /dev/ttyACM0 --motor-index 0 \
+    --candidate BLHeli32_HexFiles/Furling32_Multi_32_95.Hex \
+    --discover-unresolved --max-combo 2 --checkpoint dumps/reaper-discover.checkpoint \
+    --time-budget 15300
+```
+
+- **`--max-combo N`** (default 1): the most simultaneously-unknown bytes to attempt within one
+  8-byte window. A window with `k` unknowns costs `256^k` guesses — 1 is the same 256 guesses a
+  single unknown byte always cost; 2 costs up to 65,536 (~1 hour); 3+ is generally impractical.
+  When a window has no partial knowledge but the candidate covers it fully, this uses **hypothesis
+  mode**: try every way exactly `k` of the 8 bytes could differ from the candidate (k=1 first, then
+  2, up to `--max-combo`), holding the rest at the candidate's own value — confirmed on real
+  hardware to correctly find genuine single/double-byte divergences without ever risking the
+  unreliable bare-byte approach.
+- **`--checkpoint FILE`**: appends each resolved byte (or exhausted window) to `FILE` immediately,
+  and reads it back on startup to skip already-known work. Safe to `Ctrl-C` or `kill` (not `-9`) at
+  any time — both are caught to cleanly exit the 4-way-if session first (confirmed: an uncaught
+  kill mid-session sticks the FC's own passthrough state, recoverable only by a physical USB
+  replug). Resume by passing the exact same `--checkpoint` path (and the same
+  `--candidate`/`--start`/`--end`/`--max-combo`) again.
+- **`--time-budget SECONDS`**: stops cleanly (same as `Ctrl-C`) after this much wall-clock time,
+  rather than running to completion — use this for a long unattended session (e.g. `15300` for
+  4h15m) so it's checkpointed and stoppable instead of needing to be killed externally.
+
+**Real-hardware finding worth knowing before a long run** (2026-09-08/09, see [Hardware
+Findings](knowledge/hardware-findings.md)): real content differences between two firmware
+*versions* appear to cluster in multi-byte groups (a changed instruction, an updated constant)
+rather than isolated single bytes, and some regions differ across dozens to hundreds of
+consecutive bytes at once (a likely code insertion/relocation) — those are not brute-forceable at
+any practical `--max-combo`. A real recovery is most likely for small, isolated mismatching
+windows; check `dump-firmware`'s own unresolved-range report first (without
+`--discover-unresolved`) to see how the gap is actually shaped before committing hours to it.
+
 ## 7a. Capturing raw traffic with tcpdump (no redirect needed — do this first)
 
 This is how the real `blheli.org` hostname was originally found ([PLAN.md §4](../PLAN.md#4-architecture-decision)), and it works

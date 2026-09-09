@@ -14,6 +14,20 @@ ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#`
 - **Port contention**: another process (your own BLHeliSuite32xl, or a leftover script) holding the
   serial port produces confusing, intermittent-looking failures that have nothing to do with the
   protocol. Check `fuser /dev/ttyACM0` before attributing a failure to a code bug.
+  **Confirmed a real crash from this, not just a connect-time failure (2026-09-09)**: opening
+  EmuFlight Configurator against the same FC mid-run, during a long unattended `dump-firmware
+  --discover-unresolved` session, killed the whole process outright with an uncaught
+  `serial.SerialException: device reports readiness to read but returned no data (device
+  disconnected or multiple access on port?)` — raised from inside a live `verify_flash()` call, a
+  different exception type than `fw.FourWayError`, so neither the `finally` block's
+  `exit_interface()` guard nor the `KeyboardInterrupt` handler catches it. Progress up to that
+  point was NOT lost (per-byte checkpointing had already saved 2 windows), but the process itself
+  died ungracefully and no cleanup message printed. **Not yet fixed**: `_dump_firmware_body` should
+  also catch `serial.SerialException` (or a broader base) alongside `KeyboardInterrupt` for any
+  long unattended run, to fail as cleanly as an interrupt does. Practical rule until then: never run
+  another serial client (BLHeliSuite32xl, EmuFlight/Betaflight Configurator, etc.) against the same
+  FC while a long `dump-firmware` session is active — only one client can hold the port at a time,
+  and this project's own error handling doesn't yet cover a mid-run steal cleanly.
 - **Occasional `enter_4way_if` failure, unconfirmed cause**: twice during Betaflight testing
   (2026-09-04), the very first command of a fresh CLI invocation (`MSP_SET_PASSTHROUGH`) got no
   reply at all — a different failure than the `connect_esc()` timing issue below. Tried to
@@ -478,6 +492,49 @@ one completed byte. Resumed with the same `--checkpoint` path: **no physical USB
 needed** (confirming the SIGTERM fix works), the already-checkpointed byte was skipped with no
 round-trip, and the run continued correctly. This part of the fix is solid, independent of the
 Verify-reliability problem found in the same testing pass above.
+
+## Real brute-force campaign attempt on the damaged Reaper (2026-09-09)
+
+Attempted a real, hours-long `dump-firmware --discover-unresolved` run against the full remaining
+gap, with two real problems found and fixed along the way — recorded here so neither repeats.
+
+**`--max-combo 2`'s real cost was underestimated by ~30x.** The hypothesis-mode design (see
+above) tries every `C(8,k)` combination of positions for a given `k`, each up to 256 guesses — for
+`k=2` that's `C(8,2)=28` combinations × up to 65,536 guesses each = **up to 1,835,008 guesses
+(~30 hours) to exhaust one window**, not the "~65,536 guesses, ~1 hour" figure this project
+originally estimated (conflating "one combination's cost" with "the whole k-level's cost"). Worse,
+the time-budget check inside the hypothesis loop only fired once per `k`-level, not between the 28
+combination attempts within `k=2` — so a single unlucky window could consume the entire session
+budget with no way to move on or stop cleanly. **Confirmed live**: a real `--max-combo 2` run spent
+100 minutes stuck on the very first mismatching window (`0x2430`) with zero checkpoint entries
+written and zero broader progress. **Fixed same day**: the time-budget check now runs before every
+single combination attempt, not just once per `k`-level.
+
+**A separate, unrelated crash**: opening EmuFlight Configurator against the same FC mid-run raised
+an uncaught `serial.SerialException` that killed the process outright — see the port-contention
+quirk entry above for the full account and the still-open follow-up (catching this exception class
+too).
+
+**Net result this session**: after the above, re-ran with `--max-combo 1` (cheap, ~15-25s/window,
+broad coverage) for the remaining time before the session had to end. Confirmed 2,376/23,808 bytes
+(10.0%) via the phase-1 candidate scan, narrowing the real gap to 4,282 distinct 8-byte windows
+(vs. the earlier 2,450 32-byte-granularity chunks — this project now has the actual window-level
+shape of the gap, not just a coarse chunk count). Only 2 windows were fully brute-force-tested
+before the session ended: `0x2418` and `0x2430`, both already known (see above) — k=1 hypothesis
+search exhausted, confirming they need k≥2 to resolve, consistent with everything else found. A
+full `--max-combo 1` sweep of all 4,282 windows, then `--max-combo 2` targeted at whichever windows
+that leaves, is the natural next session's starting point — `dumps/reaper-campaign-260909-k1.checkpoint`
+carries the 2 confirmed results forward.
+
+**New resource, not yet evaluated**: the user found [OpenOCD](https://openocd.org/) (open-source
+on-chip debugger, JTAG/SWD, works with ST-Link/J-Link/CMSIS-DAP probes) as a general lead for the
+SWD-based path Goal 2/Goal 3 already require. This doesn't change the confirmed "physical
+soldering + a real debug probe is required regardless" finding (OpenOCD is software, not a way
+around needing physical SWD access) — but it's the concrete, standard tool that would actually
+drive flash-read/RDP-clear operations once that hardware step is taken, replacing the vaguer "a
+3-piece ST-Link V2 clone debugger set" placeholder already noted in the backlog. Not evaluated
+against this project's specific chips (STM32F051x6, GD32F350x6, AT32F421) — a real next step if
+the soldering/physical-access trade-off is ever explicitly accepted.
 
 ## `write_flash()` without erase-first corrupts far more than the targeted bytes (2026-09-07)
 

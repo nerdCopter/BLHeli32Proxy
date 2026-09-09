@@ -28,7 +28,8 @@ destination `$BLHELI32PROXY_APP_DIR`/`$BLHELI32PROXY_ARCHIVE_DIR` you have set (
 one if they haven't said. This is a plain, reproducible script, not something that needs AI to
 execute step by step; report the file count it prints when done. Requires `$BLHELI32PROXY_APP_DIR`
 or `$BLHELI32PROXY_ARCHIVE_DIR` to already be set (`./scripts/setup-env.sh` if not) — see
-`docs/USAGE.md` §1a/§1b.
+`docs/USAGE.md` §1a/§1b. To check what's already fetched without re-running the script, use
+`blheli32proxy list-test-firmware --dir <folder>` (`docs/USAGE.md` §6a).
 
 ## 2. Environment prerequisites (OS-level software, per platform)
 
@@ -76,7 +77,56 @@ subfolder — see `docs/knowledge/hardware-findings.md` for a real bug this fold
 populated to avoid; Windows/macOS: standard install/Applications directories). Launch it, and if
 doing (B), remind the user to use a unique output filename before they save.
 
-## 5. Run the test suite
+## 5. This project's own hardware tools — backup, diagnose, recover firmware (all read-only)
+
+Independent of the real app: no approval server or redirect needed for any of these, just real
+hardware connected. Three tiers, from routine to experimental:
+
+**A) Back up an ESC's Setup/config block** (`dump-config`) — decodes 45 of 46 known field names
+(only `Eep_ESC_Mode` remains, a genuinely exhausted gap — see
+`docs/knowledge/setup-block-fields.md`) and always saves a byte-exact raw backup too:
+
+```bash
+blheli32proxy dump-config --port /dev/ttyACM0 --raw-dir dumps
+```
+
+Defaults to every ESC the flight controller reports (`--motor-index N` for just one channel;
+`--direct` instead of an FC port for a standalone ESC on a dedicated adapter). `docs/USAGE.md` §6/§6b.
+
+**B) Diagnose / probe raw flash** (`probe-flash`, `dump-info-page`) — a quick sanity check of one
+address/length, or a full dump of the `0x7c00+` info page (activation status, device info). Neither
+touches the application-code region below `0x7c00` (that's (C), below). `docs/USAGE.md` §6.
+
+**C) Recover application-code firmware via the Verify oracle** (`dump-firmware`, experimental, can
+take hours) — `cmd_DeviceRead` is blocked below `0x7c00` by the ESC's own Read-Out Protection
+(RDP), so this compares real flash against candidate `.Hex` file(s) (from item 1) via
+`cmd_DeviceVerify`, which RDP doesn't block:
+
+```bash
+blheli32proxy dump-firmware --port /dev/ttyACM0 --motor-index 0 \
+    --candidate BLHeli32_HexFiles/<matching-file>.Hex
+```
+
+This alone is fast (no brute force) and reports how much matched vs. genuinely differs — **do this
+first** to see how the gap is shaped. If a real gap remains and recovery is worth attempting, add
+`--min-mismatch-length 8` (finest reliable bisection granularity) and
+`--discover-unresolved --max-combo N --checkpoint FILE --time-budget SECONDS` (checkpointed,
+resumable brute force, self-stopping after `SECONDS`) — see `docs/USAGE.md`'s "Recovering
+unresolved bytes via brute force" section for the full flag reference and a real finding worth
+reading first: differences between firmware *versions* tend to cluster in multi-byte groups, and
+some regions differ across dozens-to-hundreds of consecutive bytes at once — not recoverable at any
+practical `--max-combo`, so this works best on small, isolated gaps.
+
+**AI-actionable**: (A)/(B) just need the serial port confirmed (`/dev/ttyACM0`-style on Linux,
+`COMn` on Windows) and, for (A), `--raw-dir dumps` always included. (C) additionally needs a
+candidate `.Hex` file for this exact ESC layout (ask which one, or check
+`BLHeli32_HexFiles/`/`$BLHELI32PROXY_ARCHIVE_DIR` for a name match); for a real
+`--discover-unresolved --time-budget` run, ask for the available time budget and a `--checkpoint`
+path, prefer a background task so the user can do other things, and never launch a multi-hour run
+without their explicit go-ahead on the time commitment — confirm hardware stays connected and
+powered for the duration.
+
+## 6. Run the test suite
 
 Quick sanity check that the tool's own code works in your environment:
 
@@ -88,13 +138,14 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 **AI-actionable**: run this, report the actual pass/fail count from the output (never assume
 "tests pass" without reading it), and if anything fails, investigate before reporting done.
 
-## 6. Investigate / troubleshoot / develop known gaps
+## 7. Investigate / troubleshoot / develop known gaps
 
-Pick up any open item from `PLAN.md`'s current status and backlog — e.g. cross-version
-Setup-block field-offset confirmation, or anything else listed there as not yet done. **The single
-most important remaining item** is capturing the real ESC-activation network call (Goal 4),
-detailed below — this is this project's core remaining goal, and the last thing to attempt since
-it carries real, irreversible risk.
+Pick up any open item from `PLAN.md`'s current status and backlog — e.g. `Eep_ESC_Mode` (the one
+remaining Setup-block field, exhausted via every available technique — see
+`docs/knowledge/setup-block-fields.md`), continuing the Goal 2 brute-force recovery (item 5C above),
+or anything else listed there as not yet done. **The single most important remaining item** is
+capturing the real ESC-activation network call (Goal 4), detailed below — this is this project's
+core remaining goal, and the last thing to attempt since it carries real, irreversible risk.
 
 **AI-actionable**: read `PLAN.md` for current status, `docs/knowledge/INDEX.md` for the technical
 reference base, and work the specific gap the user names — or summarize the open items and ask

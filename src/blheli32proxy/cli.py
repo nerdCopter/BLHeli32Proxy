@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 ARCHIVE_DIR_ENV_VAR = "BLHELI32PROXY_ARCHIVE_DIR"
@@ -559,20 +561,33 @@ def _default_firmware_dump_name(candidate_path: str) -> str:
     return f"dumps/BLHeli32_{model} - Rev. {version} - AppCode_{date.today():%y%m%d}.bin"
 
 
-def _load_checkpoint(path: Path) -> tuple[dict[int, int], set[int]]:
+def _load_checkpoint(path: Path) -> tuple[dict[int, int], set[int], dict[int, int]]:
     """Load a --discover-unresolved checkpoint file: one `<addr> <value>` or
-    `<addr> UNDISCOVERABLE` line per byte a prior (possibly interrupted) run already resolved.
-    Missing file is not an error (first run). A malformed line is skipped with a warning, never
-    fatal — a checkpoint is a resume aid, not a source of truth that must be perfect."""
+    `<addr> UNDISCOVERABLE` line per byte a prior (possibly interrupted) run already resolved, or
+    one `<window_addr> HYPOTHESIS_EXHAUSTED <max_combo>` line per window whose hypothesis search
+    (see fw.discover_window()'s docstring) was fully exhausted up to that --max-combo with no
+    match — resumed at a higher --max-combo, that window is retried from k=max_combo+1, not from
+    scratch. Missing file is not an error (first run). A malformed line is skipped with a warning,
+    never fatal — a checkpoint is a resume aid, not a source of truth that must be perfect."""
     discovered: dict[int, int] = {}
     undiscoverable: set[int] = set()
+    hypothesis_exhausted: dict[int, int] = {}
     if not path.exists():
-        return discovered, undiscoverable
+        return discovered, undiscoverable, hypothesis_exhausted
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = raw_line.strip()
         if not line:
             continue
         parts = line.split()
+        if len(parts) == 3 and parts[1] == "HYPOTHESIS_EXHAUSTED":
+            try:
+                window_addr = int(parts[0], 0)
+                max_combo_tried = int(parts[2], 0)
+            except ValueError:
+                print(f"Warning: checkpoint {path} line {lineno}: malformed, skipping: {line!r}", file=sys.stderr)
+                continue
+            hypothesis_exhausted[window_addr] = max(hypothesis_exhausted.get(window_addr, 0), max_combo_tried)
+            continue
         if len(parts) != 2:
             print(f"Warning: checkpoint {path} line {lineno}: malformed, skipping: {line!r}", file=sys.stderr)
             continue
@@ -588,7 +603,29 @@ def _load_checkpoint(path: Path) -> tuple[dict[int, int], set[int]]:
             discovered[addr] = int(parts[1], 0)
         except ValueError:
             print(f"Warning: checkpoint {path} line {lineno}: bad value, skipping: {line!r}", file=sys.stderr)
-    return discovered, undiscoverable
+    return discovered, undiscoverable, hypothesis_exhausted
+
+
+def _append_checkpoint_window(path: Path, window_addr: int, max_combo: int) -> None:
+    """Append one 'this window's hypothesis search is exhausted up to k=max_combo' line —
+    see _load_checkpoint()'s docstring for the format and resume semantics."""
+    with path.open("a") as f:
+        f.write(f"{window_addr:#06x} HYPOTHESIS_EXHAUSTED {max_combo:#04x}\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _candidate_window_bytes(candidates: list[dict[int, int]], window_addr: int) -> bytes | None:
+    """The first candidate (in order given) with full 8-byte data at this aligned window, or None
+    if no candidate covers all 8 bytes — mirrors _verify_region's own "first candidate with data
+    wins" convention."""
+    from .protocol import hexfile
+
+    for mem in candidates:
+        data = hexfile.chunk_at(mem, window_addr, 8)
+        if data is not None:
+            return data
+    return None
 
 
 def _append_checkpoint(path: Path, addr: int, value: int | None) -> None:
@@ -650,12 +687,14 @@ def _cmd_dump_firmware(args: argparse.Namespace) -> int:
     checkpoint_path = Path(args.checkpoint).expanduser().resolve() if args.checkpoint else None
     checkpoint_discovered: dict[int, int] = {}
     checkpoint_undiscoverable: set[int] = set()
+    hypothesis_exhausted: dict[int, int] = {}
     if checkpoint_path is not None:
-        checkpoint_discovered, checkpoint_undiscoverable = _load_checkpoint(checkpoint_path)
-        if checkpoint_discovered or checkpoint_undiscoverable:
+        checkpoint_discovered, checkpoint_undiscoverable, hypothesis_exhausted = _load_checkpoint(checkpoint_path)
+        if checkpoint_discovered or checkpoint_undiscoverable or hypothesis_exhausted:
             print(f"Resuming from checkpoint {checkpoint_path}: "
                   f"{len(checkpoint_discovered)} byte(s) already discovered, "
-                  f"{len(checkpoint_undiscoverable)} already known undiscoverable.")
+                  f"{len(checkpoint_undiscoverable)} already known undiscoverable, "
+                  f"{len(hypothesis_exhausted)} window(s) with a prior hypothesis search recorded.")
 
     # Convert SIGTERM into the same KeyboardInterrupt Ctrl-C already raises, so a `timeout`
     # wrapper or `kill` (not -9) still unwinds through the finally block below and calls
@@ -668,7 +707,8 @@ def _cmd_dump_firmware(args: argparse.Namespace) -> int:
 
     try:
         return _dump_firmware_body(
-            args, candidates, start, end, checkpoint_path, checkpoint_discovered, checkpoint_undiscoverable
+            args, candidates, start, end, checkpoint_path, checkpoint_discovered, checkpoint_undiscoverable,
+            hypothesis_exhausted,
         )
     except KeyboardInterrupt:
         print("\nInterrupted — cleanly exited the 4-way-if session.", file=sys.stderr)
@@ -689,6 +729,7 @@ def _dump_firmware_body(
     checkpoint_path: Path | None,
     checkpoint_discovered: dict[int, int],
     checkpoint_undiscoverable: set[int],
+    hypothesis_exhausted: dict[int, int],
 ) -> int:
     """The actual dump-firmware work, split out of _cmd_dump_firmware so the outer function can
     wrap it in one try/except KeyboardInterrupt (see _cmd_dump_firmware's SIGTERM handling)."""
@@ -752,7 +793,10 @@ def _dump_firmware_body(
         page_addr = start
         while page_addr < min(end, ADDR_SETUP_BLOCK):
             page_len = min(256, min(end, ADDR_SETUP_BLOCK) - page_addr)
-            _verify_region(transport, candidates, page_addr, page_len, confirmed, unresolved_ranges)
+            _verify_region(
+                transport, candidates, page_addr, page_len, confirmed, unresolved_ranges,
+                args.min_mismatch_length,
+            )
             page_addr += page_len
 
         read_addr = max(start, ADDR_SETUP_BLOCK)
@@ -770,6 +814,8 @@ def _dump_firmware_body(
             print(f"{len(unresolved_ranges)} unresolved range(s): " + ", ".join(f"{a:#06x}+{n}" for a, n in unresolved_ranges))
 
         if args.discover_unresolved and unresolved_ranges:
+            import itertools
+
             unresolved_addrs = {
                 range_addr + offset for range_addr, range_len in unresolved_ranges for offset in range(range_len)
             }
@@ -777,15 +823,24 @@ def _dump_firmware_body(
             print(f"\nBrute-force discovering {total_unresolved} unresolved byte(s) via real, "
                   f"8-byte-aligned cmd_DeviceVerify windows (fixed 2026-09-08 — see "
                   f"docs/knowledge/hardware-findings.md; bare 1-byte guessing is unsound). A window "
-                  f"with k simultaneously-unknown bytes costs 256^k guesses — windows needing more "
-                  f"than --max-combo={args.max_combo} are skipped, not attempted.")
+                  f"with k simultaneously-unknown bytes costs 256^k guesses. Windows with no partial "
+                  f"knowledge but full candidate data use hypothesis mode instead: try every way "
+                  f"exactly k of the 8 bytes could differ from the candidate (k=1 first, then 2, up "
+                  f"to --max-combo={args.max_combo}), holding the rest at the candidate's own value.")
             undiscoverable: list[int] = []
             insufficient_data: list[int] = []
             too_many_unknowns: list[int] = []
+            hypothesis_exhausted_bytes: list[int] = []
             from_checkpoint = 0
             done = 0
+            campaign_start = time.time()
+            budget_exceeded = False
 
             for window_addr in sorted({a - (a % 8) for a in unresolved_addrs}):
+                if args.time_budget is not None and time.time() - campaign_start > args.time_budget:
+                    budget_exceeded = True
+                    break
+
                 window_unresolved = [window_addr + i for i in range(8) if (window_addr + i) in unresolved_addrs]
                 still_needed = [a for a in window_unresolved if a not in checkpoint_discovered and a not in checkpoint_undiscoverable]
                 for a in window_unresolved:
@@ -818,48 +873,115 @@ def _dump_firmware_body(
                     insufficient_data.extend(still_needed)
                     done += len(still_needed)
                     continue
-                if len(unknown_offsets) > args.max_combo:
+
+                if len(unknown_offsets) <= args.max_combo:
+                    # genuinely few unknowns already (e.g. a partial checkpoint from a prior run)
+                    result = fw.discover_window(transport, window_addr, known, unknown_offsets)
+                    done += len(still_needed)
+                    if result is None:
+                        for i in unknown_offsets:
+                            a = window_addr + i
+                            undiscoverable.append(a)
+                            if checkpoint_path is not None:
+                                _append_checkpoint(checkpoint_path, a, None)
+                        print(f"  window {window_addr:#06x}: UNDISCOVERABLE for offset(s) "
+                              + ", ".join(f"+{i}" for i in unknown_offsets) + f" ({done}/{total_unresolved})")
+                    else:
+                        for i in unknown_offsets:
+                            a = window_addr + i
+                            confirmed[a] = result[i]
+                            if checkpoint_path is not None:
+                                _append_checkpoint(checkpoint_path, a, result[i])
+                        print(f"  window {window_addr:#06x}: discovered "
+                              + ", ".join(f"+{i}={result[i]:#04x}" for i in unknown_offsets)
+                              + f" ({done}/{total_unresolved})", end="\r")
+                    continue
+
+                # k > max_combo with no partial knowledge -- try hypothesis mode instead of just
+                # skipping, if the candidate has full data for this window (2026-09-09, see
+                # docs/knowledge/hardware-findings.md's real-hardware validation of this approach)
+                window_candidate = _candidate_window_bytes(candidates, window_addr)
+                already_tried = hypothesis_exhausted.get(window_addr, 0)
+                if window_candidate is None or already_tried >= args.max_combo:
                     too_many_unknowns.extend(window_addr + i for i in unknown_offsets)
                     done += len(still_needed)
                     continue
 
-                result = fw.discover_window(transport, window_addr, known, unknown_offsets)
+                found = False
+                result = None
+                exhausted_fully = True
+                for k in range(already_tried + 1, args.max_combo + 1):
+                    if args.time_budget is not None and time.time() - campaign_start > args.time_budget:
+                        exhausted_fully = False
+                        budget_exceeded = True
+                        break
+                    for combo in itertools.combinations(range(8), k):
+                        # check the budget between EVERY combo attempt, not just once per k-level --
+                        # k=2 alone is up to C(8,2)=28 combos * 65536 guesses each (~30h worst case
+                        # for one window), so a once-per-k check could block the whole session on a
+                        # single unlucky window (confirmed live, 2026-09-09 -- see
+                        # docs/knowledge/hardware-findings.md)
+                        if args.time_budget is not None and time.time() - campaign_start > args.time_budget:
+                            exhausted_fully = False
+                            budget_exceeded = True
+                            break
+                        combo_known = {i: window_candidate[i] for i in range(8) if i not in combo}
+                        result = fw.discover_window(transport, window_addr, combo_known, list(combo))
+                        if result is not None:
+                            found = True
+                            break
+                    if found or budget_exceeded:
+                        break
                 done += len(still_needed)
-                if result is None:
-                    for i in unknown_offsets:
-                        a = window_addr + i
-                        undiscoverable.append(a)
-                        if checkpoint_path is not None:
-                            _append_checkpoint(checkpoint_path, a, None)
-                    print(f"  window {window_addr:#06x}: UNDISCOVERABLE for offset(s) "
-                          + ", ".join(f"+{i}" for i in unknown_offsets) + f" ({done}/{total_unresolved})")
-                else:
-                    for i in unknown_offsets:
+                if found:
+                    for i in range(8):
                         a = window_addr + i
                         confirmed[a] = result[i]
-                        if checkpoint_path is not None:
+                        if checkpoint_path is not None and a in unresolved_addrs:
                             _append_checkpoint(checkpoint_path, a, result[i])
-                    print(f"  window {window_addr:#06x}: discovered "
-                          + ", ".join(f"+{i}={result[i]:#04x}" for i in unknown_offsets)
-                          + f" ({done}/{total_unresolved})", end="\r")
+                    print(f"  window {window_addr:#06x}: HYPOTHESIS MATCH (k={len(combo)}, offsets "
+                          f"{combo} differ from candidate) ({done}/{total_unresolved})")
+                elif exhausted_fully:
+                    hypothesis_exhausted[window_addr] = args.max_combo
+                    if checkpoint_path is not None:
+                        _append_checkpoint_window(checkpoint_path, window_addr, args.max_combo)
+                    hypothesis_exhausted_bytes.extend(still_needed)
+                    print(f"  window {window_addr:#06x}: hypothesis search exhausted up to k="
+                          f"{args.max_combo} ({math.comb(8, args.max_combo) if args.max_combo <= 8 else 0}+ "
+                          f"combinations tried), no match ({done}/{total_unresolved})")
+                # else: time budget ran out mid-window -- nothing recorded for it this round, the
+                # current k-level restarts from scratch on resume (bounded re-work, not lost progress)
+                if budget_exceeded:
+                    break
 
+            if budget_exceeded:
+                print(f"\nTime budget ({args.time_budget}s) reached — stopping cleanly.")
+                if checkpoint_path is not None:
+                    print(f"Resume with the same --checkpoint {checkpoint_path} (and the same "
+                          f"--candidate/--start/--end/--max-combo) to continue.")
             if from_checkpoint:
                 print(f"\n{from_checkpoint} byte(s) resumed from checkpoint, no round-trip needed.")
             if too_many_unknowns:
-                print(f"\n{len(too_many_unknowns)} byte(s) skipped — their window has more "
-                      f"simultaneously-unknown bytes than --max-combo={args.max_combo} allows: "
+                print(f"\n{len(too_many_unknowns)} byte(s) skipped — no candidate data for their window, "
+                      f"or already hypothesis-exhausted at this --max-combo={args.max_combo}: "
                       + ", ".join(f"{a:#06x}" for a in too_many_unknowns))
             if insufficient_data:
                 print(f"\n{len(insufficient_data)} byte(s) skipped — their 8-byte window extends "
                       f"outside the scanned [--start, --end) range: "
                       + ", ".join(f"{a:#06x}" for a in insufficient_data))
-            resolved = total_unresolved - len(undiscoverable) - len(too_many_unknowns) - len(insufficient_data)
+            resolved = (total_unresolved - len(undiscoverable) - len(too_many_unknowns)
+                        - len(insufficient_data) - len(hypothesis_exhausted_bytes))
             print(f"\nDiscovered {resolved}/{total_unresolved} unresolved byte(s) via reliable "
                   f"8-byte-aligned windows.")
             if undiscoverable:
                 print(f"{len(undiscoverable)} byte(s) genuinely UNDISCOVERABLE — exhaustively tried every "
                       f"combination via a real, aligned verify window (reliable, unlike the old bare "
                       f"1-byte method): " + ", ".join(f"{a:#06x}" for a in undiscoverable))
+            if hypothesis_exhausted_bytes:
+                print(f"{len(hypothesis_exhausted_bytes)} byte(s) in windows where every hypothesis up to "
+                      f"k={args.max_combo} failed — the real divergence needs a higher --max-combo (cost "
+                      f"256^k) or remains genuinely unknown: "
+                      + ", ".join(f"{a:#06x}" for a in hypothesis_exhausted_bytes))
             print(f"Now {len(confirmed)}/{total} bytes known ({100 * len(confirmed) / total:.1f}%).")
 
         with out_path.open("wb") as f:
@@ -907,13 +1029,32 @@ def _verify_region(
     from .protocol import fourwayif as fw
     from .protocol import hexfile
 
+    # cmd_DeviceVerify is confirmed unreliable below 8 bytes (2026-09-08, see
+    # docs/knowledge/hardware-findings.md's "CRITICAL: cmd_DeviceVerify is unreliable below 8
+    # bytes / when misaligned") -- never issue one, regardless of caller-supplied
+    # min_mismatch_length. A pure gap (no candidate has ANY data here) still bisects freely
+    # down to 1 byte exactly as before -- that path never calls verify_flash at all, so the
+    # unreliable-length risk doesn't apply to it.
+    min_mismatch_length = max(min_mismatch_length, 8)
+
     any_candidate_data = False
     if length <= 256:  # cmd_DeviceVerify carries at most 256 bytes per frame
+        for mem in candidates:
+            if hexfile.chunk_at(mem, addr, length) is not None:
+                any_candidate_data = True
+                break
+
+    if any_candidate_data and length < 8:
+        # would need an unreliable sub-8-byte verify_flash call -- defer to the reliable
+        # floor instead of ever issuing one; report unresolved rather than risk a wrong answer
+        unresolved_ranges.append((addr, length))
+        return
+
+    if length <= 256:
         for mem in candidates:
             data = hexfile.chunk_at(mem, addr, length)
             if data is None:
                 continue
-            any_candidate_data = True
             if fw.verify_flash(transport, addr, data):
                 for i, b in enumerate(data):
                     confirmed[addr + i] = b
@@ -1074,6 +1215,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_dumpfw.add_argument("--overwrite", action="store_true", help="allow overwriting an existing --out file")
     p_dumpfw.add_argument(
+        "--min-mismatch-length",
+        type=int,
+        default=32,
+        help="stop bisecting a genuine content MISMATCH once a chunk is this small (a pure "
+        "gap -- no candidate has any data -- still bisects to 1 byte regardless, that path "
+        "never touches hardware). Floored to 8 always — cmd_DeviceVerify is confirmed "
+        "unreliable below 8 bytes. Pass 8 for the finest reliable breakdown (more real "
+        "round-trips) before --discover-unresolved / --max-combo; the default 32 matches "
+        "this project's original scans.",
+    )
+    p_dumpfw.add_argument(
         "--discover-unresolved",
         action="store_true",
         help="brute-force discover every remaining unresolved byte via real, 8-byte-aligned "
@@ -1103,6 +1255,16 @@ def build_parser() -> argparse.ArgumentParser:
         "loop are caught to cleanly exit the 4-way-if session first, matching this project's own "
         "confirmed finding that an uncaught kill mid-session sticks the FC's passthrough state — "
         "see docs/knowledge/hardware-findings.md). No effect without --discover-unresolved.",
+    )
+    p_dumpfw.add_argument(
+        "--time-budget",
+        type=float,
+        default=None,
+        help="stop --discover-unresolved cleanly (same as Ctrl-C: exits the 4-way-if session "
+        "properly, checkpoint fully saved) after this many seconds of wall-clock time, rather "
+        "than running to completion. Checked once per window, so an in-progress window's "
+        "current --max-combo k-level may run a bit over. Pass e.g. 15300 for a 4h15m session. "
+        "No effect without --discover-unresolved; unlimited if omitted.",
     )
     p_dumpfw.add_argument(
         "--motor-index",
