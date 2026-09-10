@@ -334,3 +334,19 @@ Further probing of `blheli.org`'s other paths (path guessing/enumeration against
 live server) was deliberately not done beyond confirming what the real app itself contacts — that
 crosses from "confirming what the app calls" into active reconnaissance of someone else's
 production server, which is the user's call to make, not a default action.
+
+## Primary disassembly effort started (2026-09-10) — first two leads ruled out
+
+Started this project's own first PRIMARY disassembly pass (previous entries in this file are all
+secondhand: translated blog research or `strings`-only review) against the app's own executables,
+extracted from `$BLHELI32PROXY_ARCHIVE_DIR`. Full detail, current state, and next steps:
+`~/SYNC/nerdCopter-GIT/AI/BLHeli32Proxy/master/CONTEXT_goal4-activation-bypass.md`.
+
+**Ruled out — the `noHeartbeat` and `noPortcheck` Linux beta builds are unrelated to
+licensing.** The archive has 3 special Apr-2022 beta zips whose names suggested a licensing-related
+toggle: `beta1_OldIDE`, `beta2_noHeartbeat`, `beta3_noPortcheck`. Confirmed via `strings -a -e l -n
+6` (UTF-16LE, needed to see full string context) against the stable 1037 build: "Heartbeat" strings
+are the MSP flight-controller keepalive protocol (`CMD_HEARTBEAT`, `MSP_API_VERSION (HeartBeat)`),
+and "Port" strings are serial/USB port handling (`Unable to open port`, `SerialPort`, `USB/Com port
+removed`) — neither toggle touches network/activation code. Don't re-investigate these two builds
+for Goal 4 without a new, specific reason.
