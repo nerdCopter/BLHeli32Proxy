@@ -521,10 +521,10 @@ blheli32proxy list-test-firmware --dir /path/to/other/firmware/dir
 passthrough by default (add `--direct` for a standalone ESC on a dedicated adapter, `--motor-index
 N` for just one channel). This is read-only diagnostic tooling, **not** part of the normal
 flash/activation workflow (see [PLAN.md §4](../PLAN.md#4-architecture-decision)). The cipher and
-45 of 46 known field names are verified against real hardware (exact match to official `.ixi`
-backups across 3 independent MCU vendors and multiple firmware revisions — see [Hardware
-Findings](knowledge/hardware-findings.md)); the one remaining field (`Eep_ESC_Mode`) is a
-genuinely exhausted gap, not guessed.
+every known field name except `Eep_ESC_Mode` are verified against real hardware (exact match to
+official `.ixi` backups across 3 independent MCU vendors and multiple firmware revisions — see
+[Setup Block Fields](knowledge/setup-block-fields.md)); `Eep_ESC_Mode` is a genuinely exhausted
+gap, not guessed.
 Pass `--raw-dir dumps` to also save a byte-exact backup of each ESC's Setup block — do this
 routinely, not just before a risky experiment (see `dumps/README.md`).
 

@@ -3,6 +3,10 @@
 Say or type "menu" any time to see this list again. Pick an item by number, or describe what you
 want in your own words — either works.
 
+Several of these have a step-by-step skill under `.claude/skills/` — run it by typing its `/name`:
+`/proxy-up` (item 3), `/esc-backup` (item 5A), `/capture-activation` (item 6 / Goal 4),
+`/pre-publish` (before a public push), `/doc-sync` (doc staleness sweep).
+
 **Platform support**: developed and verified on Linux. Windows, WSL, and macOS are supported in
 the codebase and documented in `docs/USAGE.md`, but are **best-effort, not verified on real
 hardware by this project** — if something doesn't work on your platform, please open an issue or
@@ -82,9 +86,9 @@ doing (B), remind the user to use a unique output filename before they save.
 Independent of the real app: no approval server or redirect needed for any of these, just real
 hardware connected. Three tiers, from routine to experimental:
 
-**A) Back up an ESC's Setup/config block** (`dump-config`) — decodes 45 of 46 known field names
-(only `Eep_ESC_Mode` remains, a genuinely exhausted gap — see
-`docs/knowledge/setup-block-fields.md`) and always saves a byte-exact raw backup too:
+**A) Back up an ESC's Setup/config block** (`dump-config`) — decodes every known field name except
+`Eep_ESC_Mode` (a genuinely exhausted gap — see `docs/knowledge/setup-block-fields.md`) and always
+saves a byte-exact raw backup too:
 
 ```bash
 blheli32proxy dump-config --port /dev/ttyACM0 --raw-dir dumps

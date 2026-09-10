@@ -25,9 +25,9 @@ New here? Start with `MENU.md` for a guided list of things you can do, or jump s
   work; a real flash attempt through the vendor app never triggered any ESC-activation network call
   at all, and the app declined to write firmware regardless — see
   [Goals & Status](docs/knowledge/goals-status.md) for the full finding.
-- **Backups** — reads an ESC's Setup/config block over serial, decrypts it, and decodes confirmed
-  named fields (45 of 46 known `.ixi` fields, cross-checked against real `.ixi` backups across 3
-  different MCU vendors).
+- **Backups** — reads an ESC's Setup/config block over serial, decrypts it, and decodes the named
+  fields (every one except `Eep_ESC_Mode`), cross-checked against real `.ixi` backups across 3
+  different MCU vendors. See [Setup Block Fields](docs/knowledge/setup-block-fields.md).
 - **Diagnostics** — read-only flash-address probing and dumping, direct or through a flight
   controller's 4-way-if passthrough.
 

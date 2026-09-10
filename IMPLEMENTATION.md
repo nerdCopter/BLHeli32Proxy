@@ -5,16 +5,15 @@ the real, unmodified `BLHeliSuite32xl` app for all ESC communication (flashing, 
 project's actual deliverable is the **approval server** (`src/blheli32proxy/approval/`) that stands
 in for BLHeli's dead activation server, reached via an OS-level hostname *and port* redirect (see
 `docs/USAGE.md` §4). **Real hostname and the status-check request/response CONFIRMED**, both via
-traffic decryption and, separately, live against the real app through this project's own server
-(see [Activation & Licensing](docs/knowledge/activation-licensing.md)): `GET/HEAD
-https://blheli.org/BLHeli32_2017_1/status.php?p=BLHeliSuite32xl&v=1044`, response format
-`SERVER>text=...;` (not JSON). The still-unconfirmed piece is the separate ESC-activation call
-(needs an actual flash+activate attempt — see `MENU.md` item 6).
+traffic decryption and, separately, live against the real app through this project's own server —
+the exact request, response format (`SERVER>text=...;`, not JSON), and User-Agent are in
+[Activation & Licensing](docs/knowledge/activation-licensing.md). The still-unconfirmed piece is
+the separate ESC-activation call (needs an actual flash+activate attempt — see `MENU.md` item 6).
 
 ## What exists and is tested
 
-All 116 tests pass (`.venv/bin/python -m pytest tests/`), all in a `.venv` created in the project
-root (`python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`).
+The test suite passes (`.venv/bin/python -m pytest tests/`), run from a `.venv` created in the
+project root (`python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`).
 
 | Module | Status | Verified how |
 |---|---|---|
@@ -29,7 +28,7 @@ root (`python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`).
 | `approval/server.py` | Done | stdlib `http.server`-based, HTTP or HTTPS (via `ssl.SSLContext`), HEAD support added for the confirmed endpoint, verbose request logging. Tested with real socket connections, not mocked, including GET+HEAD against the confirmed path |
 | `protocol/msp.py` | Done, but not the real path | MSP v1 framing + `enable_esc_passthrough()`/`exit_esc_passthrough()` for `MSP_SET_PASSTHROUGH` mode=1 (`PROTOCOL_BLHELI` raw relay). **Confirmed dead over USB CDC-ACM on real hardware** (`usbmon` capture) — never used by the CLI; kept for reference/tests only. See the module docstring and [Protocol Reference](docs/knowledge/protocol-reference.md) |
 | `protocol/fourwayif.py` | Done, **live-verified on real hardware across 4 ESC families** | The real framed 4-way-if bootloader protocol BLHeliSuite32xl/AM32-Configurator actually use. Request/reply build+parse tested against real bytes captured from BLHeliSuite32xl's own traffic (not invented). `enter_4way_if()`/`connect_esc()`/`read_flash()`/`exit_interface()` live-tested end-to-end via a real flight controller against 4 different ESC families/firmware revisions: connected to each board's channels, read device signatures and 256-byte Setup blocks, decrypted with `cipher/xtea.py`, and cleanly exited every time — no power-cycle needed. `connect_esc()` includes a `reset_settle_delay` (100ms, unconditional between reset and init-flash) and a `retry_delay` (5.5s, after a failed attempt) — both derived from real BLHeli firmware timing behavior, see [Hardware Findings](docs/knowledge/hardware-findings.md) and [Protocol Reference](docs/knowledge/protocol-reference.md) |
-| `protocol/setup_fields.py` | Done, partial by design, **live-verified against real backups on 3 MCU vendors / 4 firmware revisions** | Decodes 45 of 46 known Setup-block field names from the decrypted plaintext — every value matches a real BLHeliSuite32xl-produced `.ixi` backup file exactly. Byte offsets confirmed identical across 3 independent MCU vendors (STM32, GD32, AT32) and 4 firmware revisions (32.7 through 32.10), via differential capture, direct `.ixi` cross-reference, cross-board value correlation, and this project's own research corpus — see [Setup Block Fields](docs/knowledge/setup-block-fields.md) for the full method breakdown. Only `Eep_ESC_Mode` remains unconfirmed (checked exhaustively, not just deferred). Also provides `decode_name()`/`decode_esc_layout()`/`decode_note_array()` for the 3 string/array fields, and `format_ixi_section()`, a confirmed-fields-only `.ixi`-style section writer — never fabricates unconfirmed fields, and its output must never drive a write-back/restore path (see the module docstring) |
+| `protocol/setup_fields.py` | Done, partial by design, **live-verified against real backups on 3 MCU vendors / 4 firmware revisions** | Decodes every known Setup-block field name except `Eep_ESC_Mode` from the decrypted plaintext — every value matches a real BLHeliSuite32xl-produced `.ixi` backup file exactly. Byte offsets confirmed identical across 3 independent MCU vendors (STM32, GD32, AT32) and 4 firmware revisions (32.7 through 32.10), via differential capture, direct `.ixi` cross-reference, cross-board value correlation, and this project's own research corpus — see [Setup Block Fields](docs/knowledge/setup-block-fields.md) for the full method breakdown. Only `Eep_ESC_Mode` remains unconfirmed (checked exhaustively, not just deferred). Also provides `decode_name()`/`decode_esc_layout()`/`decode_note_array()` for the 3 string/array fields, and `format_ixi_section()`, a confirmed-fields-only `.ixi`-style section writer — never fabricates unconfirmed fields, and its output must never drive a write-back/restore path (see the module docstring) |
 | `cli.py` | Done | `serve`, `gen-cert` (shells out to `openssl`), `dump-config`/`probe-flash`/`dump-info-page` — `--motor-index` drives `protocol/fourwayif.py` (the confirmed-real path); without it, the original direct-adapter `protocol/client.py` path (untested here beyond argument parsing and the archive-write refusal, which is tested). `dump-config --out FILE` appends a partial-backup `.ixi`-style section via `setup_fields.format_ixi_section()` |
 | `cli.py: list-test-firmware` | Done, test-covered | Lists `*.Hex` filenames in a directory (read-only), sorted. Defaults `--dir` to `$BLHELI32PROXY_ARCHIVE_DIR` if set. Unit-tested (`tests/test_cli.py`): filters non-`.Hex` files, sorts output, honors the env-var default, and errors cleanly on a missing `--dir`/env var or a non-directory path |
 

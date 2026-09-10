@@ -21,3 +21,7 @@ dist/
 # overriding the user's global ~/.gitignore exclusion of them.
 !AGENTS.md
 !CLAUDE.md
+
+# AI skills ship with the repo so end-users get them too. Local Claude state does not.
+.claude/*
+!.claude/skills/

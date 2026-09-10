@@ -33,7 +33,9 @@ ESC as earlier assumed. Same read also confirmed `#Aikon_AK32_4IN1_35A_6S_V1_0#`
   reply at all — a different failure than the `connect_esc()` timing issue below. Tried to
   reproduce deliberately (same motor, back-to-back invocations, zero delay) and couldn't — looks
   like an occasional USB/serial hiccup rather than a systematic timing bug. Not chased further; if
-  it recurs often, revisit.
+  it recurs often, revisit. Note `enter_4way_if()` has no retry loop of its own (unlike
+  `connect_esc()`); a small retry matching BLHeliSuite32xl's own 5-attempt default would likely
+  absorb this.
 - **Real battery power matters**: with the FC on USB power only (no LiPo), some ESC channels
   connected unreliably. Once real 6S battery power was applied, all 4 channels connected
   consistently. If a channel behaves oddly, check power before debugging the protocol.
