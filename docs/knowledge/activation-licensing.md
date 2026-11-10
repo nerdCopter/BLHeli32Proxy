@@ -450,3 +450,71 @@ Three functions fully decompiled:
 the single most likely candidate among everything resolved so far to contain or lead directly to
 the real network call. Stopped here to check in before further descent, per the user's explicit
 instruction to keep this session tightly scoped.
+
+## Goal 4 core mystery resolved (with a surprising answer) — 2026-11-10, session 2 continued
+
+User approved continuing without further check-ins ("keep digging"). `FUN_00726b04`'s chain (the
+case-`0x0D` branch above) was chased fully: `FUN_0072acb0`/`FUN_0073d064`/`FUN_00726b04` all turned
+out to be **baud-rate selection and interface connect/disconnect bookkeeping**
+(`param_2 == 0x4b00/0x9600/0xe100/0x1c200` — literal 19200/38400/57600/115200 baud constants), not
+activation logic. `TryEnterManufacturerKey`'s real role in `BLHeliSuite32TestActivator.exe` appears
+to be validating/initializing the currently-selected serial interface before entering manufacturing
+mode — not submitting a license key over the network. Dead end in that binary; don't re-chase this
+specific function.
+
+**Pivoted to the right binary**: the user's stated goal is "the proxy's reply lets the *real app*
+flash" — that means the consumer-facing `BLHeliSuite32xl` app (the one the 2026-09-06 historical
+hardware test actually drove), not the manufacturer-only `TestActivator.exe`. Resolved
+`actFlashBLHeliExecute` in `$BLHELI32PROXY_ARCHIVE_DIR/BLHeliSuite32xl/BLHeliSuite32xl` (Linux ELF,
+x86-64, stripped) using the same `TMethodRec` technique, adapted for this binary's 8-byte pointers
+and higher `.text` range (`0x44bc80`–`0xc94b14`). Traced the full call chain:
+
+```
+actFlashBLHeliExecute (0xc43c40)
+  -> FUN_00a2eec0  (re-entrancy guard, then real work)
+    -> FUN_00a29a60  (fires an OnBeforeFlash-style event, then:)
+      -> FUN_00a2c290  (populates the ESC-slot-selection array, fires an event, gated by:)
+        -> FUN_00a2d4c0  (interface-type + "more than 1 connected?" checks — all LOCAL state)
+      -> FUN_00a27760  (WriteFlash dispatch: picks per-interface-type Send_cmd_DeviceWrite)
+          *** explicitly checks: if (memory size == 0) show "Nothing to write
+              (memory size = 0)." and skip writing entirely ***
+        -> FUN_00a30f70  (write, then on success call FUN_00a24fe0, retry up to 3x)
+          -> FUN_00a24fe0 = "ReadActivationStat" (confirmed by its own trace print
+             `L"ReadActivationStat:"`): reads the activation-status byte, input-protocol byte,
+             and good/bad frame counters **directly from the ESC via a local on-device read**
+             (`FUN_00a24f40`, a 16-byte local read) — NOT a network call.
+      -> FUN_00a26600 = the real "ActivateESC" routine: logs "Validated Serial number
+         successfully" / "Validation FAILED!", calls FUN_00a30f70 (write+local-activation-read),
+         then logs "Activated ESC successfully." / "FAILED to activate ESC.", and prints
+         "Time for Server (ms): " **only if a counter (`*local_20`) is > 0** — but nothing in this
+         entire traced chain ever writes to that counter. It is initialized to 0 and never
+         touched again anywhere in the traced call graph.
+```
+
+**Conclusion, confirmed by direct decompilation, not inference**: in this consumer app build,
+"ESC activation" is read **locally from the ESC's own EEPROM byte** (burned in at manufacture
+time), not fetched from or validated against BLHeli's server. The "Time for Server (ms)" UI line
+is vestigial/dead code in this build — its trigger condition can never become true anywhere in the
+traced path. **This directly explains, and is fully consistent with, the project's own
+2026-09-06 historical finding** ("a real Flash Selected ESC attempt made ZERO extra network calls
+beyond the harmless status.php ping") — there is no second host to find, because this code path
+makes no second network call at all.
+
+**This changes Goal 4's actual blocker.** The proxy's approval server cannot be "the thing that
+unlocks flashing" via a reply, because nothing in the consumer app's write path reads a server
+reply to decide whether to write. The real explanation for the historical "no `cmd_DeviceWrite`
+sent" observation is almost certainly the `FUN_00a27760` "memory size == 0" check quoted above —
+i.e., whatever buffer that test attempt built to write was computed as empty (a diff/compare
+step upstream decided there was nothing to write), not a licensing refusal. **Not yet confirmed
+with a live capture** — this is the concrete next step, and it needs hardware (watch whether
+"Nothing to write" actually shows during a repeat of the historical test, and if so, trace why
+the write-buffer size came out as 0), not more static analysis.
+
+**Where the real per-UUID activation POST (if it exists anywhere in these binaries) must then
+live**: almost certainly only in the manufacturer-only provisioning path
+(`actManufPostSerialNumbersExecute`'s underlying feature, or `BLHeliSuite32TestActivator.exe`'s
+factory auto-flash-and-register workflow), which a consumer app build may have entirely stripped
+or never linked — consistent with `btn_Test_ServerConnectionClick` also resolving to a trivial
+non-network stub in that binary. Not chased further this session; would need its own investigation
+if ever relevant (it is NOT needed for letting a consumer flash test firmware, since the consumer
+app doesn't check it).

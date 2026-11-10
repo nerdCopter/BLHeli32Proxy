@@ -126,3 +126,16 @@ flowchart TD
   is the same "real, irreversible risk" the backlog's Goal 4 item already flags, now with a
   concrete demonstrated example (this session's Setup-block corruption) rather than a theoretical
   concern.
+- **Confirmed by decompilation, not inference, 2026-11-10**: the consumer `BLHeliSuite32xl` app's
+  entire Flash-click call chain (`actFlashBLHeliExecute` down through the write/retry/activation
+  functions) contains no network call of any kind. "Activation" is read directly from the ESC's
+  own EEPROM byte (local device read), not validated against a server. This fully explains the
+  2026-09-06 "zero extra network calls" finding — there is no second host to find in this build.
+  **The proxy approval server cannot unlock flashing via its reply, because nothing in this app's
+  write path reads or branches on a server reply.** See
+  [Activation & Licensing](activation-licensing.md#goal-4-core-mystery-resolved-with-a-surprising-answer--2026-11-10-session-2-continued)
+  for the full traced call graph. The real explanation for the historical "no `cmd_DeviceWrite`
+  sent" observation is most likely a write-buffer-size-zero condition in `FUN_00a27760` (confirmed
+  present: a literal "Nothing to write (memory size = 0)." check) — not a licensing refusal. Not
+  yet confirmed on real hardware; that's the concrete next step, and it needs a live capture, not
+  more static analysis.
