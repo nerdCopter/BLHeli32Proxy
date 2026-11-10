@@ -350,3 +350,103 @@ are the MSP flight-controller keepalive protocol (`CMD_HEARTBEAT`, `MSP_API_VERS
 and "Port" strings are serial/USB port handling (`Unable to open port`, `SerialPort`, `USB/Com port
 removed`) — neither toggle touches network/activation code. Don't re-investigate these two builds
 for Goal 4 without a new, specific reason.
+
+## Windows PE import/strings pass on the two un-disassembled targets (2026-11-10)
+
+Extracted and checked both targets named in the prior handoff:
+`BLHeliSuite32TestActivator.exe` (v31.9.0.3, 7,335,936 bytes, Aug 2022) and
+`BLHeliSuite32Test.exe` (v31.10.0.1, from the `LEAK.flashlocal.` zip, 7,793,664 bytes, Nov 2023).
+Both PE32/i386, 11 sections, same import set.
+
+- **Confirmed: no static `WinINet`/`WinHTTP`/`ws2_32` import in either binary** — the full DLL
+  import list is `SetupApi`, `advapi32`, `comctl32`, `comdlg32`, `gdi32`, `kernel32`, `msvcrt`,
+  `ole32`, `oleaut32`, `shell32`, `user32`, `version`, `winmm`, `winspool.drv`. `kernel32`'s own
+  import table does carry `LoadLibraryA/W/ExW` + `GetProcAddress`, so this does not rule out
+  networking — Delphi's Indy library commonly resolves `ws2_32` dynamically rather than via a
+  static import.
+- **Confirmed via `strings`: Indy (`TIdHTTP`, `TIdTCPClient`, `TIdTCPConnection`,
+  `TIndySSPINTLMClient`) and `Winapi.WinInet` are both linked into these builds.** This extends
+  the existing Linux-ELF finding (`BLHeliSuite32xl-local-binary-analysis.en.md`: "HTTPS + JSON,
+  via a modern HTTP client") to these two Windows builds specifically, with `IdHTTP` now a
+  confirmed concrete component name rather than an inferred stack.
+- **No literal hostname/URL/path string found** (same as every prior static pass) — confirms the
+  endpoint is runtime-constructed in these builds too, not just the main `BLHeliSuite32xl` app.
+- **New, previously-undocumented symbol family — a client-side UUID-collision/duplicate-detection
+  subsystem**: `MCU_UUID`, `AnalyzeUUID_unique`, `FUUIDdoubleCount`, `FUUIDdoublesAr`,
+  `UUIDdoubleFound`, `GenerateUUIDdoubleInfoMsg`. Not previously listed anywhere in this file.
+  Likely exists to catch a cloned/duplicated per-chip UUID (e.g. a counterfeit or re-flashed MCU)
+  before it reaches the server. `TLocalUUIcsv` is a new concrete name for the already-documented
+  "LOCAL: Added UUID to csv" local ledger.
+- **New lead: a manufacturer-only "Test Connection To Server" button.** `strings`-diffing the two
+  builds shows `btn_Test_ServerConnectionClick` / `"Test Connection To Server"` exist only in
+  `BLHeliSuite32TestActivator.exe`, not in `BLHeliSuite32Test.exe` — a simpler, isolated
+  server-reachability check (likely lighter than the full activation POST) that is the better
+  first disassembly target once real tooling is available, over the much larger
+  `actManufPostSerialNumbersExecute` activation flow itself.
+- **`IsBannedFromFlashRevision` confirmed present in both builds** (file offsets `0x2e1dfa`
+  activator / present in leak build too), same as `actManufPostSerialNumbersExecute`
+  (`0x52f7ae`/`0x53064b`/`0x6eabe5`) and `TryEnterManufacturerKey` (`0x3bd1bb`) — all three fall
+  inside the `.text` section (file offsets `0x400`–`0x546a00` per `objdump -h`), the normal
+  location for Delphi's inline RTTI/published-method name strings.
+- **Strings-diff did not find a flash-gate bypass in the "LEAK.flashlocal" build** — `diff` of
+  sorted unique strings between the two builds shows only expected app-identity/UI differences
+  (menu items present in the manufacturer activator but not the end-user Test app: "Auto write
+  custom settings after flash", "Auto Repeat Flash on Connect", the KEY-code-reminder dialogs, the
+  Manufacturing-settings menu); no distinct bypass-flag string was found. This check is
+  strings-level only, not a code-path diff — doesn't rule out a bypass implemented purely in logic
+  with no distinguishing string.
+- **Real blocker, confirmed by trying**: with only `objdump`/`readelf`/`nm`/`strings`/`file`
+  available (same set as the prior stalled session — `capstone`/`radare2`/`ghidra` still absent),
+  a Delphi RTTI method-name string (e.g. the three offsets above) cannot be reliably mapped to its
+  compiled function's entry point — `objdump -d` disassembles raw `.text` bytes with no function
+  boundaries or name-to-address linkage for a stripped-of-exports Delphi binary like this one.
+  Going from "this string exists" to "here is the code that runs when this fires" needs a
+  disassembler with Delphi VMT/RTTI awareness (e.g. IDA + the IDR plugin, or Ghidra with a Delphi
+  analyzer) — plain `objdump` cannot do this safely at the token cost this would take. This is the
+  real, concrete stopping point for this pass, not a decision to give up early.
+
+## First real Ghidra decompilation of the activator (2026-11-10, session 2)
+
+Installed Ghidra 12.2 (headless, `analyzeHeadless`) specifically to get past the symbol-to-address
+wall above. Delphi's classic published-method table (`TMethodRec`: `Size:Word, Code:Pointer,
+Name:ShortString`) is parseable directly from raw file bytes — confirmed working, with one gotcha:
+when a method name's length is itself a printable ASCII value (e.g. 32 = space), `strings` silently
+swallows the preceding length byte into its reported match, shifting the apparent offset by one.
+Cross-checking two independent RTTI-table occurrences of the same method name resolved this
+reliably. A second gotcha: the resolved code pointer can land on alignment padding (`lea eax,[eax+0]`
+NOPs) or an unrelated neighboring function's tail `ret`, a few bytes before the real
+`push ebp; mov ebp,esp` prologue — always verify with a short `objdump -d` window before trusting a
+decompile.
+
+Three functions fully decompiled:
+
+- **`btn_Test_ServerConnectionClick` (the manufacturer-only "Test Connection To Server" button) —
+  confirmed NOT a network call.** Its entire body is a generic Delphi interface-refcount/
+  finalization pattern (`iRam00976f10 = iRam00976f10 + 1; if (iRam00976f10 == 0)
+  FUN_0040ae3c(&DAT_00976f08);`) with an SEH exception frame around it — no HTTP, no socket, no
+  string building. This disproves the prior session's hypothesis that this button was a good lead
+  for finding the activation endpoint. Dead end as resolved; not worth re-chasing without a new,
+  specific reason.
+- **`actManufPostSerialNumbersExecute` — confirmed NOT the POST call itself; it's a
+  *settings* dialog.** Full body is a VCL input-query loop: prompts "Enter ms (min. %d ms /
+  default %d ms): / Timespan for waiting after connect FC", loops re-prompting on bad input, calls
+  what looks like `Sleep()` (`FUN_0042b868`) between attempts. This matches the `ManufPost_intf!
+  FrameManufActivationEventSettings` string found in the prior session's `strings` pass — the
+  action is titled "post serial numbers" but actually configures a connect-wait timespan *used by*
+  that feature, not the network transmission itself. The real POST call is not in this function.
+- **`TryEnterManufacturerKey` — partially decompiled, a real gate, not yet at the network call.**
+  Reads a global (`PTR_DAT_0095a288`, likely the active device/interface object), calls two
+  helpers, then switches on a status byte at `(param_1 + 0x55)`: case `0x0C` →
+  `FUN_0072acb0(param_1+0x50, *PTR_DAT_0095a288)`; case `0x0D` → checks via `FUN_00727748`, and if
+  false, checks-then-commits via `FUN_00726b04(param_1+0x48, *PTR_DAT_0095a288)` (writing a
+  not-yet-validated state via `FUN_007c42bc(param_1, 0)` on failure, or `FUN_007cb488(param_1)` on
+  success); case `0x0E` → `FUN_0073d064(param_1+0x4c, *PTR_DAT_0095a288)`. This is a real
+  validate-then-act state machine (consistent with the `TActivationStatus` enum from the prior
+  session's `strings` pass), but the network/crypto call itself is nested at least one more call
+  deep (most likely inside the `0x0D` case's `FUN_00726b04` — a "check, else validate-and-commit"
+  shape is the closest match to an activation attempt found so far).
+
+**Next hop, not yet taken**: decompile `FUN_00726b04` (the case-`0x0D` validate-and-commit call) —
+the single most likely candidate among everything resolved so far to contain or lead directly to
+the real network call. Stopped here to check in before further descent, per the user's explicit
+instruction to keep this session tightly scoped.
