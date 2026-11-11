@@ -530,3 +530,37 @@ def test_candidate_window_bytes_returns_first_full_match():
 def test_candidate_window_bytes_none_when_no_candidate_covers_it():
     candidate_partial = {0x2400: 0x01, 0x2401: 0x02}
     assert cli._candidate_window_bytes([candidate_partial], 0x2400) is None
+
+
+def test_main_reports_four_way_error_as_communication_issue_not_a_traceback(monkeypatch, capsys):
+    """A dropped/loose connection or power blip surfaces as FourWayError from deep inside the
+    4-way-if handshake (real-hardware case, 2026-11-11: Reaper ESC0 init-flash NACK after a bad
+    USB reseat) -- main() should report it plainly and exit 1, not let it propagate as a raw
+    traceback."""
+    from blheli32proxy.protocol.fourwayif import FourWayError
+
+    def boom(_args):
+        raise FourWayError("4-way-if command 0x37 returned ACK 0x0f (not OK)")
+
+    monkeypatch.setattr(cli, "_cmd_dump_config", boom)
+    exit_code = cli.main(["dump-config", "--port", "/dev/ttyACM0"])
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "Communication error" in err
+    assert "cable" in err and "power" in err
+
+
+def test_main_reports_os_error_as_port_issue_not_a_traceback(monkeypatch, capsys):
+    """A missing/unplugged port (serial open failure) is an OSError, not a FourWayError --
+    needs its own friendly message rather than a traceback too."""
+
+    def boom(_args):
+        raise OSError("could not open port /dev/ttyACM0: no such file or directory")
+
+    monkeypatch.setattr(cli, "_cmd_dump_config", boom)
+    exit_code = cli.main(["dump-config", "--port", "/dev/ttyACM0"])
+
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "Port/communication error" in err

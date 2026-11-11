@@ -712,3 +712,24 @@ there's no reason its bootloader must be the same size. What this does raise: wh
 something else (e.g. manufacturing-provisioned per-unit data) that firmware-update files simply
 never touch for an unrelated reason. Not resolved either way; `dump-firmware`'s Verify oracle
 technique could test this at `0x1000`–`0x1FFF` specifically if a genuine need arises.
+
+## Post-reset Setup-block backups, both boards (2026-11-11)
+
+Both 4-in-1 boards were reset to factory defaults by the user, then backed up fresh via
+`dump-config --raw-dir dumps` (all 4 channels each), then renamed from the tool's default
+`escN-setup-<timestamp>.bin` to include board + firmware version (the default name doesn't
+distinguish which physical board a file came from). Raw files:
+`dumps/foxeer-reaper-32.10-esc{0,1,2,3}-setup-20261111-0851*.bin` and
+`dumps/ak32-32.7-esc{0,1,2,3}-setup-20261111-0852*.bin`.
+
+- **Foxeer Reaper** (`FOXEER_Reaper4IN1_F4_65A_128`, 32.10 — `Eep_FW_Main_Revision=32`,
+  `Eep_FW_Sub_Revision=100`): all 4 channels identical except `Eep_Pgm_Direction` (1/2/1/2,
+  alternating per motor position — expected).
+- **AK32** (`Aikon_AK32_4IN1_35A_6S_V1_0`, 32.7 — `Eep_FW_Main_Revision=32`,
+  `Eep_FW_Sub_Revision=70`): all 4 channels identical except `Eep_Pgm_Direction` (1/2/2/1).
+
+These are genuine factory-default values for each layout (not user-customized), confirming the
+AK32 = 32.7 / Reaper = 32.10 firmware-version split already noted elsewhere in this doc. Both
+boards' prior (2026-09-07/08) backups remain on file under the same `dumps/` dir, git-tracked,
+distinguished by their timestamp — nothing was overwritten; the tool's own filenames are
+per-run-timestamped by design.

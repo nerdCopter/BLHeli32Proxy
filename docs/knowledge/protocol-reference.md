@@ -168,3 +168,17 @@ ciphertext decrypts to garbage, as expected). The ESC's own encryption apparentl
 session-to-session (possibly IV/nonce-like) in a way that still round-trips correctly. Not
 investigated further — if anything, it's a stronger validation of the implementation than a single
 read would be.
+
+**Contradicting data point, MCU-family-dependent (2026-11-11)**: the above was reconfirmed again on
+AK32 (STM32F051x6) — three separate reads of the same channel, three different ciphertexts, same
+plaintext every time. But the **Foxeer Reaper (GD32F350x6)** behaved differently in the same
+session: two full 4-channel reads 11 minutes apart (power-cycled in between) produced **byte-
+identical ciphertext** for matching plaintext, including across different channels sharing the
+same plaintext (ESC0/ESC2, both `Eep_Pgm_Direction=1`, same ciphertext; ESC1/ESC3, both
+`Eep_Pgm_Direction=2`, same ciphertext). That looks like a deterministic function of plaintext
+alone on this MCU/firmware — no per-read or per-channel nonce — directly contradicting the
+"varies every read" theory established on the STM32 board. Not yet reconciled: genuinely two
+different encryption implementations (ST vs. GigaDevice silicon/firmware), or the Reaper's
+apparent determinism is itself coincidental (e.g. a counter that happens to reset to the same
+value on each power-up). Needs more same-board, same-session repeated reads on both MCU families
+before concluding either way.

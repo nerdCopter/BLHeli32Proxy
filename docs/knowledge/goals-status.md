@@ -52,6 +52,19 @@ flowchart TD
   corrupted one. No general-purpose "change just this one field" write path exists yet; would need
   either an erase-then-full-rewrite sequence, or the same full-block-copy pattern with the target
   field edited in the source plaintext before re-encrypting.
+  - **Scope correction (2026-11-11)**: the proven repair above was motor 3 → motor 0 **on the same
+    physical AK32 4-in-1 board** (one PCB, 4 ESC channels sharing one Setup-block layout except
+    `Eep_Pgm_Direction`). **Not yet tested**: copying a full 256-byte Setup block between two
+    *separate physical* 4-in-1 boards of the same model (e.g. two different AK32 units). Expected
+    to work the same way (identical firmware/model → identical struct layout), but this is an
+    assumption, not a hardware-confirmed result. Also unconfirmed: whether any undecoded byte in
+    the Setup block (see [Setup Block Fields](setup-block-fields.md#whats-not-decoded-and-why))
+    carries a per-unit identifier that a blind full-block copy would also overwrite — the 45
+    decoded fields include no documented serial/UUID, but the block isn't 100% decoded.
+  - **Current as of 2026-11-11**: both of the user's 4-in-1 boards (AK32, Foxeer Reaper) were reset
+    to factory defaults and freshly backed up (all 4 channels each) — see
+    [Hardware Findings](hardware-findings.md#post-reset-setup-block-backups-both-boards-2026-11-11).
+    Both now have a current, valid Setup-block backup on file in `dumps/` (git-tracked).
 
 ## 2. Firmware dumps — reopened, bug fixed, but real data looks mostly unrecoverable this way (2026-09-08)
 
@@ -139,3 +152,11 @@ flowchart TD
   present: a literal "Nothing to write (memory size = 0)." check) — not a licensing refusal. Not
   yet confirmed on real hardware; that's the concrete next step, and it needs a live capture, not
   more static analysis.
+- **Correction (2026-11-11)**: no application-firmware flash has ever been completed by this
+  project, by any method. Not via the vendor app — BLHeli's activation/version-check servers are
+  confirmed dead, which blocks the real app's own flash path and is the entire reason this project
+  exists. Not via this project's own tooling either — `write_flash()` has only ever been tested
+  against the small 256-byte Setup/config page (Goal 1, above); it has never been run against the
+  actual application-code flash sectors, and `page_erase()` has never been tested on real hardware
+  at all. There is no "known-good official firmware image we can flash" capability today — do not
+  state otherwise.

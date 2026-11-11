@@ -17,11 +17,15 @@ blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
 ```
 
 Also the destination for raw Setup-block backups: `dump-config --raw-dir dumps` saves each dumped
-ESC's exact 256-byte ciphertext to `esc<N>-setup-<timestamp>.bin` — a byte-exact backup usable for
-a full restore, unlike `--out`'s decoded-fields-only partial-backup file. Confirmed valuable in
-practice: 2026-09-07's real-hardware corruption incident (`docs/knowledge/hardware-findings.md`)
-was only repairable because a byte-identical sibling ESC existed to copy from — capture these
-routinely, not just before a risky experiment.
+ESC's exact 256-byte ciphertext to `<layout>-<version>-esc<N>-setup-<timestamp>.bin` — a byte-exact
+backup usable for a full restore, unlike `--out`'s decoded-fields-only partial-backup file. Layout
+and firmware version come from the decrypted Setup block itself (`Eep_ESC_Layout`,
+`Eep_FW_Sub_Revision`), so two different physical boards never produce indistinguishable filenames
+(2026-11-11 fix — see "Known mislabeled captures" below for the exact failure mode this closes;
+older captures from before this fix keep the bare `esc<N>-setup-<timestamp>.bin` form). Confirmed
+valuable in practice: 2026-09-07's real-hardware corruption incident
+(`docs/knowledge/hardware-findings.md`) was only repairable because a byte-identical sibling ESC
+existed to copy from — capture these routinely, not just before a risky experiment.
 
 **Whitelisted, not gitignored (2026-09-07)** — see `AGENTS.md`'s Publishing Gate. Everything here
 is this project's own extraction from the user's own owned hardware, not a vendor-released binary

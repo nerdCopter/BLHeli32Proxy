@@ -231,14 +231,33 @@ def _print_defaults_comparison(plaintext: bytes, candidate_path: str, key) -> No
         print(f"  {name}: real={real_value} default={default_value} ({flag})")
 
 
-def _save_raw_setup_backup(ciphertext: bytes, raw_dir: str | None, esc_index: int) -> None:
-    """Save one ESC's exact 256-byte Setup-block ciphertext to <raw_dir>/esc<N>-setup-<timestamp>.bin
-    — a byte-exact backup usable for a full restore (unlike --out's decoded-fields-only file, which
-    only covers the 45 confirmed fields). No-op if raw_dir is None. Refuses to write into
+def _format_fw_version(digits: str) -> str:
+    """Format a BLHeli_32 firmware version from its Eep_FW_Sub_Revision digit string
+    (e.g. "95" -> "32.9.5", "70" -> "32.7.0", "100" -> "32.10.0") — BLHeli_32's own
+    versioning never left the 32.x major line. Shared with `_default_firmware_dump_name`."""
+    if len(digits) == 1:
+        return f"32.{digits}"
+    if len(digits) == 2:
+        return f"32.{digits[0]}.{digits[1]}"
+    if len(digits) == 3 and digits.startswith("10"):
+        return f"32.10.{digits[2]}"
+    return f"32.{digits}"
+
+
+def _save_raw_setup_backup(ciphertext: bytes, plaintext: bytes, raw_dir: str | None, esc_index: int) -> None:
+    """Save one ESC's exact 256-byte Setup-block ciphertext to
+    <raw_dir>/<layout>-<version>-esc<N>-setup-<timestamp>.bin — a byte-exact backup usable for a
+    full restore (unlike --out's decoded-fields-only file, which only covers the 45 confirmed
+    fields). Board layout (`Eep_ESC_Layout`) and firmware version (`Eep_FW_Sub_Revision`) are read
+    straight from the decrypted Setup block itself, so two different physical boards never produce
+    indistinguishable filenames. No-op if raw_dir is None. Refuses to write into
     $BLHELI32PROXY_ARCHIVE_DIR/$BLHELI32PROXY_APP_DIR, same guard as dump-info-page/dump-firmware."""
     if raw_dir is None:
         return
+    import re
     from datetime import datetime
+
+    from .protocol import setup_fields
 
     path = Path(raw_dir).expanduser().resolve()
     guard_result = _dump_output_archive_guard(path / "placeholder.bin")
@@ -246,7 +265,17 @@ def _save_raw_setup_backup(ciphertext: bytes, raw_dir: str | None, esc_index: in
         raise SystemExit(guard_result)
     path.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_file = path / f"esc{esc_index}-setup-{timestamp}.bin"
+
+    try:
+        layout = setup_fields.decode_esc_layout(plaintext)
+        sub_revision = setup_fields.decode_confirmed_fields(plaintext)["Eep_FW_Sub_Revision"]
+        version = _format_fw_version(str(sub_revision))
+        slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", layout).strip("_") or "unknown-layout"
+        prefix = f"{slug}-{version}-"
+    except (ValueError, KeyError):
+        prefix = ""
+
+    out_file = path / f"{prefix}esc{esc_index}-setup-{timestamp}.bin"
     out_file.write_bytes(ciphertext)
     print(f"Saved raw Setup-block backup: {out_file}")
 
@@ -279,7 +308,7 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
             print(f"Decrypted {len(plaintext)} bytes:")
             print(plaintext.hex())
             _print_confirmed_fields(plaintext, esc_index=0, out_path=args.out)
-            _save_raw_setup_backup(block.ciphertext, args.raw_dir, esc_index=0)
+            _save_raw_setup_backup(block.ciphertext, plaintext, args.raw_dir, esc_index=0)
             if args.show_defaults:
                 _print_defaults_comparison(plaintext, args.show_defaults, key)
         finally:
@@ -317,7 +346,7 @@ def _dump_config_via_fourwayif(
         print(f"Decrypted {len(plaintext)} bytes:")
         print(plaintext.hex())
         _print_confirmed_fields(plaintext, esc_index=motor_index, out_path=out_path)
-        _save_raw_setup_backup(ciphertext, raw_dir, esc_index=motor_index)
+        _save_raw_setup_backup(ciphertext, plaintext, raw_dir, esc_index=motor_index)
         if show_defaults:
             _print_defaults_comparison(plaintext, show_defaults, key)
     finally:
@@ -351,7 +380,7 @@ def _dump_config_all_via_fourwayif(
             print(f"Decrypted {len(plaintext)} bytes:")
             print(plaintext.hex())
             _print_confirmed_fields(plaintext, esc_index=motor_index, out_path=out_path)
-            _save_raw_setup_backup(ciphertext, raw_dir, esc_index=motor_index)
+            _save_raw_setup_backup(ciphertext, plaintext, raw_dir, esc_index=motor_index)
             if show_defaults:
                 _print_defaults_comparison(plaintext, show_defaults, key)
     finally:
@@ -549,15 +578,7 @@ def _default_firmware_dump_name(candidate_path: str) -> str:
     if not m:
         return f"dumps/{stem}-AppCode_{date.today():%y%m%d}.bin"
     model = m.group("model")
-    digits = m.group("version")
-    if len(digits) == 1:
-        version = f"32.{digits}"
-    elif len(digits) == 2:
-        version = f"32.{digits[0]}.{digits[1]}"
-    elif len(digits) == 3 and digits.startswith("10"):
-        version = f"32.10.{digits[2]}"
-    else:
-        version = f"32.{digits}"
+    version = _format_fw_version(m.group("version"))
     return f"dumps/BLHeli32_{model} - Rev. {version} - AppCode_{date.today():%y%m%d}.bin"
 
 
@@ -1140,8 +1161,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--raw-dir",
         default=None,
         help="also save each dumped ESC's exact 256-byte Setup-block ciphertext to "
-        "<raw-dir>/esc<N>-setup-<timestamp>.bin — a byte-exact backup usable for a full "
-        "restore, unlike --out's decoded-fields-only file (see dumps/README.md)",
+        "<raw-dir>/<layout>-<version>-esc<N>-setup-<timestamp>.bin — a byte-exact backup usable "
+        "for a full restore, unlike --out's decoded-fields-only file (see dumps/README.md)",
     )
     p_dumpcfg.set_defaults(func=_cmd_dump_config)
 
@@ -1280,7 +1301,25 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    from .protocol.fourwayif import FourWayError
+
+    try:
+        return args.func(args)
+    except FourWayError as exc:
+        print(f"Communication error: {exc}", file=sys.stderr)
+        print(
+            "Usually a dropped/loose connection or power issue on the ESC/FC, not a tool bug "
+            "— check the USB cable and board power, then retry.",
+            file=sys.stderr,
+        )
+        return 1
+    except OSError as exc:
+        print(f"Port/communication error: {exc}", file=sys.stderr)
+        print(
+            "Check the port is correct and the board is connected and powered, then retry.",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":
