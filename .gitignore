@@ -16,6 +16,11 @@ dist/
 .blheli32proxy/
 *.pcap
 *keylog*.txt
+# Raw capture-session working dirs (pcaps, server/request logs) -- never git-tracked,
+# may contain real network/host details and other locally-identifying info (2026-11-11).
+# A specific finding worth keeping gets copied into docs/knowledge/activation-licensing.md
+# by hand instead -- never the raw capture itself.
+docs/knowledge/captures-*/
 
 # This project tracks its own AI-instruction files (referenced from README.md/PLAN.md),
 # overriding the user's global ~/.gitignore exclusion of them.

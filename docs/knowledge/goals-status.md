@@ -25,7 +25,8 @@ flowchart TD
 
     G4 --> G4a[✅ Real hostname + version-check endpoint confirmed]
     G4 --> G4b[✅ Approval server built]
-    G4 --> G4c[⬜ Real ESC-activation endpoint not yet captured]
+    G4 --> G4e[✅ Version-check response format solved: bare OK> tag, functionally confirmed]
+    G4 --> G4c[⬜ Real ESC-activation/Flash-write behavior with correct response — untested]
     G4 --> G4d[⬜ TLS trust question untested]
 
     style G2a fill:#f66,color:#000
@@ -160,3 +161,24 @@ flowchart TD
   actual application-code flash sectors, and `page_erase()` has never been tested on real hardware
   at all. There is no "known-good official firmware image we can flash" capability today — do not
   state otherwise.
+- **Second candidate explanation found, cross-platform (2026-11-11)**: the standard Windows
+  consumer build (`BLHeliSuite32.exe` 32.10.0.0, newly found in the archive) also contains "Nothing
+  to write. ESC already matches with the parameters." / "Nothing to write. ESC already updated." —
+  a mundane, correct no-op distinct from the "memory size = 0" bug hypothesis above. The 2026-09-06
+  "zero `cmd_DeviceWrite`" observation is at least as plausibly explained by the test having staged
+  firmware already present on the ESC as by a real bug. Next hardware test must use a genuinely
+  different firmware version to tell these apart — see
+  [Activation & Licensing](activation-licensing.md#cross-platform-corroboration-the-standard-windows-consumer-build-2026-11-11).
+  Also: this build has no networking DLLs in its import table at all, independent corroboration
+  (Windows PE, separate from the already-decompiled Linux ELF) that the consumer Flash path makes
+  no network call.
+- **Version-check response format solved, functionally confirmed on real hardware (2026-11-11)**:
+  the real protocol is a bare `OK>` tag (no `SERVER>` wrapper) — found via Ghidra decompilation of
+  the real app's response parser, not guesswork. Two earlier guesses (empty body, `SERVER>text=;`)
+  and one further guess (`SERVER>OK>`) were each tried live and confirmed wrong before landing on
+  the bare tag. Confirmation isn't just the status bar text: the "Check" (multi-ESC detection)
+  action, which never completed cleanly before, now reports "Found Multiple ESC configuration" and
+  successful per-channel setup reads for all 4 ESCs. Full writeup:
+  [Activation & Licensing](activation-licensing.md#status-check-response-format-solved--the-real-protocol-is-ok-not-server-2026-11-11).
+  **Not yet done**: a real "Flash Selected ESC" attempt with this corrected response in place —
+  user has not yet agreed to risk a flash on their current boards for this specific test.

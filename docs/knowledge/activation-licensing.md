@@ -518,3 +518,115 @@ or never linked — consistent with `btn_Test_ServerConnectionClick` also resolv
 non-network stub in that binary. Not chased further this session; would need its own investigation
 if ever relevant (it is NOT needed for letting a consumer flash test firmware, since the consumer
 app doesn't check it).
+
+## Cross-platform corroboration: the standard Windows consumer build (2026-11-11)
+
+Found a third, previously-uncatalogued binary in the archive: `BLHeliSuite32_32.10.0.0.zip`
+(inside `BLHeliSuite32_BLHeli32_Firmware_ESC_configuration_tool.zip`) — the **standard, non-
+activator Windows build** of the main app, `BLHeliSuite32.exe` (PE32, Intel i386, 8,027,648 bytes,
+dated 2023-12-14). Resolves the previously-open TODO item asking whether such a build exists in the
+archive at all — it does.
+
+**Import table**: no `WinHTTP`/`WinInet`/`WS2_32`/`urlmon`/`crypt32` among its DLL imports at
+all (full list: `SetupApi`, `advapi32`, `comctl32`, `comdlg32`, `gdi32`, `kernel32`, `msvcrt`,
+`ole32`, `oleaut32`, `shell32`, `user32`, `version`, `winmm`, `winspool.drv`) — unlike the two
+`TestActivator` builds, which at least statically link Indy/`WinInet` even if unused in the Flash
+path. This consumer build appears to have **no networking capability compiled in whatsoever**.
+Independent, cross-platform (Windows PE vs. the already-decompiled Linux ELF) corroboration of the
+same conclusion: the real consumer app's Flash path cannot be making a network call, because in
+this build there's no network stack to call through at all.
+
+**Confirmed the same RTTI symbol exists here too**: `actFlashBLHeliExecute` (and lowercase/partial
+variants from the method-name table) is present by name — same function this session already fully
+traced in the Linux ELF. Not re-decompiled here (would need a second Ghidra project for a PE this
+size); the string-level match is enough to confirm it's the same code path, not platform-specific
+logic.
+
+**New strings, UTF-16LE (`strings -e l`), not found in the earlier ASCII-only pass on the other
+two binaries — likely present there too, just missed**:
+```
+Nothing to verify (memory size = 0).
+Nothing to write (memory size = 0).
+Nothing to write. ESC already matches with the parameters.
+Nothing to write. ESC already updated.
+```
+The first two are the already-documented `FUN_00a27760` messages (TODO file, `goals-status.md`).
+**The last two are new and change the leading hypothesis**: they describe the app comparing the
+target firmware/parameters against what's already on the ESC and skipping the write **because
+nothing actually differs** — a completely mundane, correct no-op, not a bug and not a licensing
+block. This is at least as plausible an explanation for the 2026-09-06 historical "zero
+`cmd_DeviceWrite` sent" observation as the memory-size-zero hypothesis: if that test staged the
+*same* firmware version already on the ESC (or parameters that already matched), the app would
+correctly report one of these two messages and legitimately skip writing.
+
+Also found, same strings family, not yet explored: `ActivationStatus`/`FActivationStatus` enum
+values `ActivationOK`, `ActivationFAILED`, `ActivationNONE`, `ActivationREAD_FAILED`,
+`ActivationUNKNOWN`, `ActivationUNREAD`, plus `FTargetFlashState`/`CheckInTargetFlashState` —
+consistent with "activation" being a small local enum/state machine read from the ESC
+(`ActivationREAD_FAILED` implies a distinct communication-failure state, separate from an invalid
+activation value), not network-checked. Matches the already-traced finding; no new contradiction.
+
+**Updated next hardware step**: when repeating the 2026-09-06 test, check **which** message
+appears if any — "memory size = 0" (points back to the write-buffer-size bug hypothesis) vs. "ESC
+already matches/already updated" (means the historical test accidentally staged firmware the ESC
+already had, and a genuinely different target firmware is needed to get a real write attempt and
+see what happens next). These are different root causes requiring different follow-up — see TODO
+file.
+
+## Status-check response format solved — the real protocol is `OK>`, not `SERVER>...` (2026-11-11)
+
+**The actual deliverable of this entire project.** Set up the full proxy chain live (approval
+server, `/etc/hosts` + iptables redirect on port 443, CA trust) against the real, running
+`BLHeliSuite32xl` native Linux app and iterated through response-format guesses with real
+hardware feedback each time:
+
+1. **Empty body** (the original `PLAN.md`-documented guess) — real app showed "Checking for
+   updates failed." every time. Confirmed via real-time observation, not stale UI.
+2. **`SERVER>text=;`** (the already-confirmed error/maintenance wrapper, with an empty message) —
+   same failure. Still fell through to the same "unrecognized" branch.
+3. **Root-caused via REA (Ghidra 12.2, MCP-driven dynamic+static RE)**: decompiled the real
+   status-check handler in `BLHeliSuite32xl` (ELF, x86-64). `search_strings` for "Checking for
+   updates failed." → one xref at `0xa26cf2` → containing procedure `FUN_00a26bf0` → calls
+   `FUN_0098ed40(local_11, local_12, obj+0x5e0)`, which returns 0 on failure. That function calls
+   the actual parser `FUN_0098d000`, then compares the retained response value against three
+   literal UTF-16 tags: `"OK>"` (`DAT_00e284dc`/`DAT_00e28b8c`, both confirmed by direct
+   `read_bytes`), `"MAY_UPDATE>"`, `"UPDATE>"`. Anything else lands in the same branch that shows
+   the "Following Message received: %s" dialog and returns failure — this is the exact code path
+   both the real 2026-09-04 maintenance-message capture (`SERVER>text=Server is down for
+   maintenance...;`) and every one of this session's guesses hit.
+4. **`SERVER>OK>` tried next** (reasoning: match the already-confirmed `SERVER>key=value;`
+   wrapper convention) — **confirmed NOT to work**, real hardware, same empty "Following Message
+   received" dialog. The parser's compared value is most likely the *original, unmodified*
+   response (Pascal string copy-on-write: a `Delete()` call elsewhere in the parser doesn't
+   retroactively change an already-taken reference to the pre-delete buffer), so a `SERVER>`-
+   prefixed string never equals the bare tag exactly.
+5. **Bare `OK>` (no `SERVER>` wrapper at all) — CONFIRMED CORRECT, real hardware, 2026-11-11.**
+   Not just a status-bar text change: the "Check" (multi-ESC detection) action, which had never
+   completed cleanly before this fix, now reports "Found Multiple ESC configuration" and
+   "ESC#1 setup read successfully" for all 4 channels. This is functional confirmation that
+   answering the version-check correctly unblocks real app behavior, not a cosmetic difference.
+
+**Implication for `SERVER>text=...;`**: that wrapper is specifically the maintenance/error-message
+format (one of the arms of this same unrecognized-tag branch, which optionally extracts and shows
+a `text=` field) — it was never a candidate for the success case at all. The real protocol has two
+independent shapes: bare tags (`OK>`/`MAY_UPDATE>`/`UPDATE>`) for the normal case, and the
+`SERVER>text=...;`/`url=...;` form for a server-pushed message, both parsed by the same code but
+compared differently.
+
+**Tooling note**: this was found using the `rea` MCP tool (`morluto/rea`, "Reverse Engineer
+Anything") with its Ghidra 12.2 provider (`GHIDRA_INSTALL_DIR` wired into
+`~/.claude/.claude.json`'s `rea` MCP server entry, needs a Claude Code restart to take effect) —
+far faster than this session's earlier hand-rolled Delphi-RTTI `TMethodRec` parsing approach for
+this specific binary (a stripped Free Pascal/Lazarus ELF, not Delphi/VCL, so the RTTI method-table
+technique used on the Windows activator builds doesn't directly apply here anyway). First Ghidra
+auto-analysis pass on this binary needs a raised timeout
+(`update_analysis_settings` → `ghidra.startup_timeout_ms` to 1800000 — the default 330000 timed out
+mid-analysis once).
+
+**Next step, user's call, not yet done**: a real "Flash Selected ESC" attempt, now that the
+version-check actually succeeds, to see whether a real `cmd_DeviceWrite` finally fires (the
+original project goal) or whether the app still declines for a separate internal reason. User has
+said they're not ready to flash their current AK32/Reaper boards yet and may prefer a different,
+less valuable ESC for that specific test — this is the one step in the whole project with real,
+irreversible risk (no firmware backup/revert path exists, see Goal 2) and needs fresh explicit
+confirmation at the moment it's attempted, same as always.

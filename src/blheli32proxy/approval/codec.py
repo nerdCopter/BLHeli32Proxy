@@ -47,18 +47,37 @@ def decode_status_check_query(path: str) -> dict[str, str]:
 
 
 def encode_status_check_response(message: str | None = None) -> bytes:
-    """Encode a response in BLHeli's own confirmed `SERVER>key=value;...;` format.
+    """Encode a response in BLHeli's own confirmed `SERVER>` wire format.
 
-    Only the error/maintenance case is confirmed from real traffic (`message` set
-    to the exact captured string reproduces it exactly). The "no update needed,
-    proceed normally" case has never been observed — passing `message=None`
-    returns an empty body as an **unverified guess** at what that looks like
-    (empty-body-means-fine is a common convention for this kind of ping, but this
-    has not been confirmed against the real app's actual behavior on receiving
-    one). Verify this empirically once possible, per PLAN.md §4.
+    Found via Ghidra decompilation of the real app's response parser
+    (`BLHeliSuite32xl`, status-check handler and its `FUN_0098d000`-style
+    helper): the parser splits the body on its first `>`, then compares a
+    retained copy of the response against the literal tags `OK>` (no update),
+    `MAY_UPDATE>`, or `UPDATE>`. Anything else falls through to the
+    maintenance/error path, which reads an optional `text=...;` field and
+    displays it verbatim in a "Following Message received:" dialog -- this is
+    exactly what the real captured maintenance reply (`SERVER>text=Server is
+    down for maintenance...;`) does, and what this project's earlier
+    empty-body and `SERVER>text=;` guesses both did too.
+
+    **`SERVER>OK>` was tried 2026-11-11 and confirmed NOT to work** (real
+    hardware test: still "Checking for updates failed."/empty "Following
+    Message received" dialog) -- the compared value is most likely the
+    retained *original* response (Pascal string copy-on-write semantics keep
+    the pre-`Delete()` buffer), which a `SERVER>`-prefixed string never equals
+    exactly.
+
+    **The bare tag with no `SERVER>` wrapper (`b"OK>"`) is CONFIRMED correct,
+    2026-11-11**: real hardware test showed the "Check" (multi-ESC detection)
+    action, which previously never completed cleanly, now reports "Found
+    Multiple ESC configuration" / "ESC#1 setup read successfully" for all 4
+    channels -- functional confirmation, not just the status bar changing
+    text. This is the real, working no-update-needed response.
+    `message` (error/maintenance case) is unchanged and still the
+    confirmed-from-real-traffic `SERVER>text=...;` form.
     """
     if message is None:
-        return b""
+        return b"OK>"
     safe_message = message.replace(";", "").replace("=", "")
     return f"SERVER>text={safe_message};".encode("utf-8")
 

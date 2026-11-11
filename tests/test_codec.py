@@ -69,9 +69,10 @@ def test_encode_status_check_response_matches_real_captured_bytes():
     assert codec.encode_status_check_response(message) == f"SERVER>text={message};".encode()
 
 
-def test_encode_status_check_response_empty_for_none():
-    # Unverified guess (see docstring) — just confirms the documented behavior.
-    assert codec.encode_status_check_response(None) == b""
+def test_encode_status_check_response_ok_tag_for_none():
+    # Bare "OK>" tag, no SERVER> wrapper — confirmed correct on real hardware
+    # 2026-11-11 (unblocked the multi-ESC "Check" action). See docstring.
+    assert codec.encode_status_check_response(None) == b"OK>"
 
 
 def test_encode_status_check_response_strips_delimiter_characters():

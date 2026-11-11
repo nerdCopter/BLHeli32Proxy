@@ -28,6 +28,15 @@ logger = logging.getLogger("blheli32proxy.approval")
 def _make_handler(policy: ApprovalPolicy) -> type[BaseHTTPRequestHandler]:
     class ApprovalRequestHandler(BaseHTTPRequestHandler):
         server_version = "BLHeli32ProxyApproval/0.1"
+        # HTTP/1.0 (the stdlib default) closes the connection after every single
+        # request. Real-hardware testing (2026-11-11) showed the actual app
+        # reusing the connection for a follow-up request and getting a TCP
+        # reset from our side when it did -- surfaced in the app as "Checking
+        # for updates failed." even though every individual request this
+        # server saw got a clean 200 OK. HTTP/1.1 keeps the connection open
+        # for the client to reuse (BaseHTTPRequestHandler.handle() then loops
+        # on handle_one_request() instead of closing after one).
+        protocol_version = "HTTP/1.1"
 
         def _send(self, payload: bytes, *, content_type: str, include_body: bool) -> None:
             self.send_response(200)
@@ -53,11 +62,11 @@ def _make_handler(policy: ApprovalPolicy) -> type[BaseHTTPRequestHandler]:
                 # CONFIRMED real endpoint — see codec.py's module docstring.
                 query = codec.decode_status_check_query(self.path)
                 logger.info("status-check request: product=%r version=%r", query.get("p"), query.get("v"))
-                # UNVERIFIED guess (empty body = "no update, proceed normally") —
-                # see encode_status_check_response's docstring.
+                # 2026-11-11: bare "OK>" tag (no SERVER> wrapper) confirmed correct on real
+                # hardware -- see encode_status_check_response's docstring.
                 payload = codec.encode_status_check_response(None)
                 self._send(payload, content_type="text/html", include_body=include_body)
-                logger.info("status-check response: empty body (unverified 'all fine' guess)")
+                logger.info("status-check response: OK> (confirmed correct, 2026-11-11)")
                 return
 
             request = codec.decode_request(path=self.path, headers=headers, body=body)

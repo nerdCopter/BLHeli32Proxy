@@ -88,7 +88,9 @@ def test_server_responds_to_confirmed_status_check_path_via_get(running_server):
     with urllib.request.urlopen(url, timeout=5) as resp:
         assert resp.status == 200
         assert resp.headers["Content-Type"] == "text/html"
-        assert resp.read() == b""  # unverified "no update" guess — see codec.py
+        # 2026-11-11: bare "OK>" tag, no SERVER> wrapper — confirmed correct
+        # on real hardware. See encode_status_check_response's docstring.
+        assert resp.read() == b"OK>"
 
 
 def test_server_responds_to_confirmed_status_check_path_via_head(running_server):
