@@ -1,10 +1,12 @@
 # BLHeli32Proxy
 
-A diagnostic and backup toolkit for BLHeli_32 ESCs, plus an in-progress local MITM/proxy server
-aimed at BLHeli32's now-dead activation call. **The proxy does not currently enable firmware
-flashing through the vendor app — see Status below.** This tool never flashes ESCs itself; all
-ESC-facing work still goes through the official, unmodified `BLHeliSuite32xl` app. See
-[PLAN.md §4](PLAN.md#4-architecture-decision) for the architecture rationale.
+A diagnostic toolkit for BLHeli_32 ESCs — including a byte-exact backup of each ESC's small
+256-byte Setup/config block, **not the application firmware** (see "What it does" below for the
+exact scope) — plus an in-progress local MITM/proxy server aimed at BLHeli32's now-dead activation
+call. **The proxy does not currently enable firmware flashing through the vendor app — see Status
+below.** This tool never flashes ESCs itself; all ESC-facing work still goes through the official,
+unmodified `BLHeliSuite32xl` app. See [PLAN.md §4](PLAN.md#4-architecture-decision) for the
+architecture rationale.
 
 **Status**: implementation in progress, real hardware confirmed working across 4 different ESC
 families and 4 different BLHeli_32 firmware revisions for backups/diagnostics. **The proxy/licensing
@@ -25,9 +27,10 @@ New here? Start with `MENU.md` for a guided list of things you can do, or jump s
   work; a real flash attempt through the vendor app never triggered any ESC-activation network call
   at all, and the app declined to write firmware regardless — see
   [Goals & Status](docs/knowledge/goals-status.md) for the full finding.
-- **Backups** — reads an ESC's Setup/config block over serial, decrypts it, and decodes the named
-  fields (every one except `Eep_ESC_Mode`), cross-checked against real `.ixi` backups across 3
-  different MCU vendors. See [Setup Block Fields](docs/knowledge/setup-block-fields.md).
+- **Backups** — reads an ESC's small 256-byte Setup/config block over serial (**not** the
+  application firmware — see below), decrypts it, and decodes the named fields (every one except
+  `Eep_ESC_Mode`), cross-checked against real `.ixi` backups across 3 different MCU vendors. See
+  [Setup Block Fields](docs/knowledge/setup-block-fields.md).
 - **Diagnostics** — read-only flash-address probing and dumping, direct or through a flight
   controller's 4-way-if passthrough.
 

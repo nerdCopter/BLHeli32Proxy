@@ -6,14 +6,21 @@ hardware. Distinct from `$BLHELI32PROXY_ARCHIVE_DIR` (the separate, pre-existing
 — see `docs/USAGE.md` §1a; that directory is never written to or deleted from by this project,
 under any circumstance).
 
-Typical use: back up an ESC's currently-flashed firmware **before** trying anything that could
-change it (a new firmware flash, an activation attempt, or backlog work like §7's AM32-flashing
-investigation) — so there's a known-good image to revert to if something goes wrong. Example:
+**Scope, read this before assuming otherwise**: there is no firmware backup capability here. The
+application firmware itself (the ESC's executable code) is blocked from being read at all by
+real hardware protection (STM32/GD32/AT32 Read-Out Protection, confirmed — see
+`docs/knowledge/goals-status.md` Goal 2) — `probe-flash`/`dump-info-page` below address `0x7C00`
+reliably return RDP-refused garbage, not a usable image, so there is no known-good firmware image
+to revert to if a flash ever goes wrong. The one thing that genuinely gets a complete, restorable
+backup is the small 256-byte Setup/config block, via `dump-config` (below) — do that routinely.
+`probe-flash`/`dump-info-page` are still worth running as a cheap read-access/RDP sanity check
+before anything riskier (a new firmware flash, an activation attempt, or backlog work like §7's
+AM32-flashing investigation), just not as a source of a firmware backup. Example:
 
 ```bash
 blheli32proxy probe-flash --port /dev/ttyACM0 --address 0x0000 --length 16
 blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
-    --out dumps/ak32-32.7-backup.bin
+    --out dumps/ak32-32.7-probe.bin
 ```
 
 Also the destination for raw Setup-block backups: `dump-config --raw-dir dumps` saves each dumped

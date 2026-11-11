@@ -35,8 +35,8 @@ actually does.
 | [`gen-cert`](#2-generate-a-tls-certificate-needed-if-the-real-activation-call-is-https-which-is-likely) | Generate a self-signed TLS cert/key pair for `serve --cert/--key` | No |
 | [`list-test-firmware`](#6a-listing-archived-test-firmware) | List your archived test-firmware `.Hex` files (read-only) | No |
 | [`dump-config`](#6-diagnostics-experimental-needs-real-hardware) | Read + best-effort-decrypt an ESC's 256-byte Setup/config block | Yes |
-| [`probe-flash`](#6b-extracting-a-firmware-backup-experimental-read-only) | Read a small chunk at an arbitrary flash address (sanity check before `dump-info-page`) | Yes |
-| [`dump-info-page`](#6b-extracting-a-firmware-backup-experimental-read-only) | Dump a flash address range to a new file (never into your archive) | Yes |
+| [`probe-flash`](#6b-attempting-a-firmware-read-experimental-read-only-usually-blocked) | Read a small chunk at an arbitrary flash address (sanity check before `dump-info-page`) | Yes |
+| [`dump-info-page`](#6b-attempting-a-firmware-read-experimental-read-only-usually-blocked) | Dump a flash address range to a new file (never into your archive) | Yes |
 
 ### `serve`
 
@@ -122,7 +122,7 @@ usage: blheli32proxy probe-flash [-h] --port PORT [--address ADDRESS] [--length 
   --address ADDRESS  flash address to read, e.g. 0x0000 (default: 0x0000)
   --length LENGTH    bytes to read, 1-256 (default: 16)
 ```
-See [§6b](#6b-extracting-a-firmware-backup-experimental-read-only) — always run this before `dump-info-page`.
+See [§6b](#6b-attempting-a-firmware-read-experimental-read-only-usually-blocked) — always run this before `dump-info-page`.
 
 ### `dump-info-page`
 
@@ -139,7 +139,7 @@ usage: blheli32proxy dump-info-page [-h] --port PORT [--start START] --end END
                         bytes read per transaction, 1-256 (default: 256)
   --overwrite           allow overwriting an existing --out file
 ```
-See [§6b](#6b-extracting-a-firmware-backup-experimental-read-only) for the full how-to and safety notes.
+See [§6b](#6b-attempting-a-firmware-read-experimental-read-only-usually-blocked) for the full how-to and safety notes.
 
 ### `dump-firmware`
 
@@ -533,16 +533,22 @@ never implements firmware flashing itself (see [PLAN.md §4](../PLAN.md#4-archit
 section for why). This project's only job during a real flash is running in the background,
 answering the app's activation call ([§3](#3-run-the-approval-server)-[§4](#4-redirect-the-activation-hostname-to-this-server-os-level)).
 
-## 6b. Extracting a firmware backup (experimental, read-only)
+## 6b. Attempting a firmware read (experimental, read-only, usually blocked)
 
 `probe-flash` and `dump-info-page` read an arbitrary flash address on a connected ESC — separate from
-`dump-config` above, which only reads the small config block. This is **read-only**: it cannot
-corrupt or brick the ESC the way a bad *write* could, and `dump-info-page` refuses to write its output
-anywhere under `$BLHELI32PROXY_ARCHIVE_DIR` (your archived BLHeli material), when that env var is
-set, regardless of what path you give it. If the env var isn't set, this check is skipped with a
-warning — verify `--out` yourself in that case.
+`dump-config` above, which only reads the small config block. **This does not produce a firmware
+backup in practice**: real hardware testing confirms `cmd_DeviceRead` is refused below address
+`0x7C00` on every MCU vendor tried (STM32/GD32/AT32's Read-Out Protection) — see the "Update,
+confirmed 2026-09-06" note further down. Below that address this only probes *whether* the
+protection can be bypassed (it can't, so far); above it (`0x7C00`+) it reads the info page (Setup
+block, activation status, device info), which is what `dump-config` already covers by name. This is
+**read-only**: it cannot corrupt or brick the ESC the way a bad *write* could, and `dump-info-page`
+refuses to write its output anywhere under `$BLHELI32PROXY_ARCHIVE_DIR` (your archived BLHeli
+material), when that env var is set, regardless of what path you give it. If the env var isn't set,
+this check is skipped with a warning — verify `--out` yourself in that case.
 
-**What isn't guaranteed**: whether this actually returns the real firmware. The "how many bytes"
+**What isn't guaranteed**: whether this actually returns the real firmware (it generally won't —
+see above). The "how many bytes"
 encoding for anything beyond the two protocol-confirmed sizes (16/256 bytes) is this project's own
 extrapolation, not confirmed by captured traffic — and it's common (arguably expected, for a
 paid-activation firmware) for an ESC's bootloader to flat-out refuse reads outside a small
@@ -569,9 +575,13 @@ blheli32proxy dump-info-page --port /dev/ttyACM0 --start 0x0000 --end 0x6000 \
 
 `dumps/` (project root, see `dumps/README.md`) is the right place for this — this project's own
 extractions from your own hardware are fine to commit and publish (see `AGENTS.md`'s Publishing
-Gate), unlike vendor-released binaries. **This is also the recommended first step before any riskier
+Gate), unlike vendor-released binaries. **This is still worth running before any riskier
 experiment** (a new firmware flash, an activation attempt, or the AM32-flashing backlog item in
-`PLAN.md` §7) — have a known-good backup of the currently-flashed firmware before changing anything.
+`PLAN.md` §7) as a cheap sanity check of current RDP/read-access state — **but see the confirmed
+update below: in practice this returns RDP-refused garbage below `0x7C00` on every MCU vendor
+tested, not a usable firmware image.** It is not a substitute for a real firmware backup, because
+no such backup exists or can currently be produced at all (Goal 2, `docs/knowledge/
+goals-status.md`) — there is no fallback to revert to below `0x7C00` if a later write goes wrong.
 
 If the probe instead returns something that doesn't look like real code (all `0xFF`, all `0x00`,
 or a refused/CRC-failed read), record that in `PLAN.md` — it answers the "can firmware even be
